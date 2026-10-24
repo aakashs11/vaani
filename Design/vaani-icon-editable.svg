@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+     width="1024" height="1024" viewBox="0 0 1024 1024"
+     role="img" aria-labelledby="title description">
+  <title id="title">वाणी — Aakash, voice, sky and earth</title>
+  <desc id="description">Editable vector recreation of the selected generated icon.
+    An ivory आ-inspired monogram merges with voice bars above a glowing horizon.
+    Every visible element is a vector path, shape, gradient, or SVG filter.
+    No raster image or external font is embedded.</desc>
+  <defs>
+    <linearGradient id="sky-gradient" x1=".2" y1="0" x2=".75" y2="1">
+      <stop offset="0" stop-color="#3044FF"/>
+      <stop offset=".42" stop-color="#2214A2"/>
+      <stop offset=".72" stop-color="#4A168F"/>
+      <stop offset="1" stop-color="#200B48"/>
+    </linearGradient>
+    <radialGradient id="sky-light" cx=".9" cy=".02" r=".78">
+      <stop offset="0" stop-color="#C3B9FF" stop-opacity=".9"/>
+      <stop offset=".46" stop-color="#7761FF" stop-opacity=".25"/>
+      <stop offset="1" stop-color="#4830E5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="earth-gradient" x1=".5" y1="0" x2=".5" y2="1">
+      <stop offset="0" stop-color="#5C228E"/>
+      <stop offset=".35" stop-color="#2E0C56"/>
+      <stop offset="1" stop-color="#10071E"/>
+    </linearGradient>
+    <linearGradient id="symbol-gradient" x1=".3" y1="0" x2=".65" y2="1">
+      <stop offset="0" stop-color="#FFFFF2"/>
+      <stop offset=".52" stop-color="#FFF8E3"/>
+      <stop offset=".84" stop-color="#FFE0F9"/>
+      <stop offset="1" stop-color="#FFD9AC"/>
+    </linearGradient>
+    <linearGradient id="rim-gradient" x1=".4" y1="0" x2=".7" y2="1">
+      <stop offset="0" stop-color="#D1C9FF" stop-opacity=".9"/>
+      <stop offset=".45" stop-color="#8B5BFF" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#9852CF" stop-opacity=".7"/>
+    </linearGradient>
+    <clipPath id="tile-clip">
+      <rect x="12" y="12" width="1000" height="1000" rx="212"/>
+    </clipPath>
+    <filter id="horizon-bloom" x="-30%" y="-250%" width="160%" height="600%">
+      <feGaussianBlur stdDeviation="23"/>
+    </filter>
+    <filter id="horizon-soft-glow" x="-20%" y="-100%" width="140%" height="300%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="symbol-glow" x="-15%" y="-20%" width="130%" height="150%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#FFA8E9" flood-opacity=".3"/>
+    </filter>
+  </defs>
+
+  <g id="icon-tile" clip-path="url(#tile-clip)">
+    <g id="sky" inkscape:groupmode="layer" inkscape:label="01 Sky">
+      <rect x="12" y="12" width="1000" height="1000" fill="url(#sky-gradient)"/>
+      <rect x="12" y="12" width="1000" height="800" fill="url(#sky-light)"/>
+      <path d="M500 12H1012V269C810 247 648 157 500 12Z" fill="#D1BBFF" opacity=".12"/>
+    </g>
+
+    <g id="earth" inkscape:groupmode="layer" inkscape:label="02 Earth">
+      <path d="M-20 714Q512 566 1044 714V1044H-20Z" fill="url(#earth-gradient)"/>
+    </g>
+
+    <g id="horizon" inkscape:groupmode="layer" inkscape:label="03 Horizon glow"
+       fill="none">
+      <path d="M-20 714Q512 566 1044 714" stroke="#FF9ACE" stroke-width="43"
+            filter="url(#horizon-bloom)"/>
+      <path d="M-20 714Q512 566 1044 714" stroke="#FFB89C" stroke-width="15"
+            filter="url(#horizon-soft-glow)"/>
+      <path d="M-20 714Q512 566 1044 714" stroke="#FFF3CF" stroke-width="3"/>
+    </g>
+
+    <g id="monogram-and-waveform" inkscape:groupmode="layer"
+       inkscape:label="04 आ monogram and voice" fill="none"
+       stroke="url(#symbol-gradient)" stroke-linecap="round" stroke-linejoin="round"
+       filter="url(#symbol-glow)">
+      <!-- Headline and the curved left form are independent, editable paths. -->
+      <path id="headline" d="M250 320Q280 282 322 282H790" stroke-width="65"/>
+      <path id="aa-left-curve"
+            d="M322 282C437 282 461 429 335 445C474 440 504 592 363 603C284 610 228 563 241 492"
+            stroke-width="68"/>
+      <path id="aa-right-stem" d="M694 284V586" stroke-width="59"/>
+      <path id="wave-short" d="M516 433V541" stroke-width="58"/>
+      <path id="wave-tall" d="M600 372V606" stroke-width="66"/>
+      <path id="wave-earth-join" d="M775 430V531Q775 558 813 566" stroke-width="60"/>
+      <path id="left-horizon-extension" d="M-20 628Q95 585 207 568Q229 565 236 545"
+            stroke-width="17"/>
+      <path id="right-horizon-extension" d="M805 565Q921 583 1044 628"
+            stroke-width="17"/>
+    </g>
+
+    <g id="tile-rim" inkscape:groupmode="layer" inkscape:label="05 Edge highlight">
+      <rect x="14" y="14" width="996" height="996" rx="210"
+            fill="none" stroke="url(#rim-gradient)" stroke-width="4"/>
+    </g>
+  </g>
+</svg>

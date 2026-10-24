@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import AVFAudio
 @preconcurrency import ApplicationServices
 import BetterWisprCore
 import Observation
@@ -99,6 +100,8 @@ final class AppModel {
     var recordingDuration: TimeInterval = 0
     var history: [Transcript] = []
     var vocabulary: [VocabularyEntry] = []
+    var evidence: [DictationEvidence] = []
+    var evidenceError = ""
     var settings = AppSettings()
     var notesCLICatalogs: [NotesCLI: NotesCLICatalog] = [:]
     var notesCatalogErrors: [NotesCLI: String] = [:]
@@ -118,6 +121,10 @@ final class AppModel {
     var onShowDashboard: (() -> Void)?
     var onShowNotetaker: ((UUID) -> Void)?
 
+    @ObservationIgnored private let evidenceStore: DictationEvidenceStore
+    @ObservationIgnored private var evidencePlayer: AVAudioPlayer?
+    @ObservationIgnored private var playbackRequest = UUID()
+    @ObservationIgnored private var sessionTimings: [String: Double] = [:]
     @ObservationIgnored private let store: LocalStore
     @ObservationIgnored private let recorder = AudioRecorder()
     @ObservationIgnored private let startsServices: Bool
@@ -162,6 +169,7 @@ final class AppModel {
 
     init(store: LocalStore = LocalStore(), startsServices: Bool = true) {
         self.store = store
+        self.evidenceStore = DictationEvidenceStore(directory: store.directory.appending(path: "DictationEvidence"))
         self.startsServices = startsServices
         meetings = MeetingModel(store: startsServices ? nil : MeetingStore(directory: store.directory.appendingPathComponent("Meetings")))
         meetingDetector = MeetingDetector(meetings: meetings)
@@ -175,6 +183,11 @@ final class AppModel {
             statusMessage = "Could not read your saved workspace. It has been left untouched: \(error.localizedDescription)"
         }
         guard startsServices else { return }
+        refreshEvidence()
+        trace("app.started", ["version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
+                              "os": ProcessInfo.processInfo.operatingSystemVersionString,
+                              "shortcut": settings.shortcut.displayName, "cleanup": settings.cleanup.rawValue,
+                              "language": settings.language, "historyCount": String(history.count)])
         applyAppearance()
         migrateLegacyOnboarding()
         if !models.contains(where: { $0.id == settings.selectedModelID }) { settings.selectedModelID = "apple" }
@@ -195,13 +208,20 @@ final class AppModel {
         globalShortcut.onRelease = { [weak self] in self?.shortcutReleased() }
         warmUpSelectedModel()
         let warmUpAfterWake: @Sendable (Notification) -> Void = { [weak self] _ in
-            MainActor.assumeIsolated { self?.warmUpSelectedModel(after: .seconds(3)) }
+            MainActor.assumeIsolated {
+                self?.refreshMicrophones()
+                self?.warmUpSelectedModel(after: .seconds(3))
+            }
+        }
+        _ = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.recorder.invalidateMicrophonePreparation() }
         }
         _ = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: warmUpAfterWake)
         _ = DistributedNotificationCenter.default().addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main, using: warmUpAfterWake)
     }
 
     func shortcutPressed() {
+        trace("shortcut.pressed")
         guard shortcutPressedAt == nil || !isBusy else { return }
         guard settings.dictationMode == .hold, !isBusy else { toggleRecording(); return }
         shortcutPressedAt = Date()
@@ -209,6 +229,7 @@ final class AppModel {
     }
 
     func shortcutReleased() {
+        trace("shortcut.released")
         guard let pressedAt = shortcutPressedAt else { return }
         shortcutPressedAt = nil
         guard phase == .preparing || phase == .recording else { return }
@@ -253,9 +274,11 @@ final class AppModel {
 
     private func startRecording(held: Bool) {
         guard !isBusy else { return }
+        let captureRequestedAt = ProcessInfo.processInfo.systemUptime
         cancelledRecording = nil
         feedbackSound?.stop()
         correctionWatcher.stop()
+        stopEvidencePlayback()
         guard isModelInstalled(selectedModel) else {
             selectedPage = .models
             fail(DictationFailure(title: "Download a model first.", message: "Download \(selectedModel.name) in Models before recording."))
@@ -270,6 +293,8 @@ final class AppModel {
         isHeldSession = held
         let token = UUID()
         generation = token
+        sessionTimings = [:]
+        trace("capture.requested", ["microphone": settings.microphone?.name ?? "automatic", "target": targetApplication?.bundleIdentifier ?? "unknown"])
         phase = .preparing
         statusMessage = "Starting microphone…"
         partialTranscript = ""
@@ -299,7 +324,8 @@ final class AppModel {
                 self.recorder.silenceThreshold = self.settings.silenceThreshold
                 self.recorder.microphone = self.settings.microphone
                 self.statusMessage = "Starting microphone…"
-                try await self.recorder.start(onSamples: onSamples)
+                try await self.recorder.start(onSamples: onSamples, since: captureRequestedAt)
+                self.trace("capture.ready")
                 let url = await website?.value
                 try Task.checkCancellation()
                 guard self.generation == token else { return }
@@ -354,6 +380,7 @@ final class AppModel {
 
     private func finishRecording() {
         guard phase == .recording else { return }
+        trace("capture.finish_requested")
         ticker?.cancel()
         ticker = nil
         voiceLevels = VoiceLevels()
@@ -371,6 +398,7 @@ final class AppModel {
             guard let self else { return }
             do {
                 let audio = try await self.recorder.finish()
+                self.trace("capture.finished", ["audioSeconds": String(audio.duration), "hasSpeech": String(audio.hasSpeech)])
                 await live?.stop()
                 if self.live === live { self.live = nil }
                 guard self.generation == token, !Task.isCancelled else {
@@ -416,8 +444,11 @@ final class AppModel {
                 try await self.prepare(model, language: recording.settings.language)
                 try Task.checkCancellation()
                 guard self.generation == token, let provider = self.provider else { return }
+                self.trace("recognition.started")
                 let recognitionStarted = ContinuousClock.now
                 let raw = try await provider.transcribe(audioURL: audio.url, language: language, vocabulary: VocabularyProcessor.hints(entries))
+                self.trace("recognition.finished", ["elapsed": String(describing: recognitionStarted.duration(to: .now)),
+                                                     "characters": String(raw.count), "hasUnknownToken": String(raw.contains("<unk>"))])
                 Logger(subsystem: "org.betterwispr.app", category: "DictationTiming").notice("Recognition completed: elapsed=\(String(describing: recognitionStarted.duration(to: .now)), privacy: .public) empty=\(raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)")
                 try Task.checkCancellation()
                 guard self.generation == token else { return }
@@ -448,9 +479,14 @@ final class AppModel {
                     spoken = StyleFormatter.apply(tone, to: spoken)
                 }
                 let (text, fixes) = VocabularyProcessor.corrected(entries, in: spoken)
-                guard !text.isEmpty else { self.fail(.noSpeech); return }
+                guard !text.isEmpty else {
+                    self.fail(.noSpeech)
+                    await self.archiveEvidence(recording, id: token, raw: raw, recognition: provider.recognitionDetails, failure: DictationFailure.noSpeech.message)
+                    return
+                }
+                self.trace("cleanup.finished", ["characters": String(text.count), "vocabularyFixes": String(fixes + heard.fixes + provider.vocabularyFixes)])
                 self.partialTranscript = text
-                let transcript = Transcript(text: text, rawText: raw, duration: audio.duration,
+                let transcript = Transcript(id: token, text: text, rawText: raw, duration: audio.duration,
                                             modelName: model.name, language: language ?? "auto",
                                             appBundleID: appBundleID, vocabularyFixes: fixes + heard.fixes + provider.vocabularyFixes)
                 var persistenceWarning: String?
@@ -458,11 +494,14 @@ final class AppModel {
                     self.history.insert(transcript, at: 0)
                     do { try self.persist() } catch { persistenceWarning = error.localizedDescription }
                 }
+                self.trace("history.saved", ["transcriptID": transcript.id.uuidString, "enabled": String(writingSettings.saveHistory), "success": String(persistenceWarning == nil)])
                 let integration: (any TextOutputIntegration)? = writingSettings.autoPaste
                     ? FocusedAppIntegration(keepsCopy: writingSettings.copyToClipboard)
                     : writingSettings.copyToClipboard ? ClipboardIntegration() : nil
                 self.activeRecording = nil
+                self.trace("delivery.started")
                 let result = try await integration?.deliver(text, to: recording.target)
+                self.trace("delivery.finished", ["result": String(describing: result)])
                 guard self.generation == token else { return }
                 if result == .copiedForManualPaste && !AXIsProcessTrusted() { self.fail(.pasteBlocked) }
                 else if result == .copiedForManualPaste {
@@ -483,15 +522,20 @@ final class AppModel {
                     }
                 }
                 if let persistenceWarning { self.statusMessage = "History could not be saved: \(persistenceWarning)" }
+                await self.archiveEvidence(recording, transcript: transcript, recognition: provider.recognitionDetails)
             } catch {
                 guard self.generation == token else { return }
                 self.fail(DictationFailure(title: "Couldn’t transcribe.", message: error.localizedDescription))
+                if !Task.isCancelled {
+                    await self.archiveEvidence(recording, id: token, failure: error.localizedDescription)
+                }
             }
         }
     }
 
     func cancelRecording() {
         guard isBusy else { return }
+        trace("dictation.cancelled")
         let recoverable: DictationRecording?
         if phase == .recording, let audio = try? recorder.stop() {
             let recording = DictationRecording(audio: audio, model: selectedModel, settings: settings, vocabulary: vocabulary,
@@ -502,6 +546,7 @@ final class AppModel {
         }
         discardRecording()
         cancelledRecording = recoverable
+        recorder.prepareMicrophone()
         present(.cancelled, for: Self.cancellationSeconds)
         playFeedback(.cancelled)
     }
@@ -813,11 +858,111 @@ final class AppModel {
         }
     }
 
+    func refreshEvidence() {
+        Task {
+            do { evidence = try await evidenceStore.records(); evidenceError = "" }
+            catch { evidenceError = "Saved recordings could not be read: \(error.localizedDescription)" }
+        }
+    }
+
+    private func archiveEvidence(_ recording: DictationRecording, transcript: Transcript? = nil,
+                                 id: UUID = UUID(), raw: String = "", recognition: RecognitionDetails? = nil,
+                                 failure: String? = nil) async {
+        guard recording.settings.retainDictationAudio, !Task.isCancelled else { return }
+        // The temporary-file owner must survive the actor's copy across suspension.
+        defer { withExtendedLifetime(recording) {} }
+        do {
+            let transcript = transcript ?? Transcript(id: id, text: "", rawText: raw, duration: recording.audio.duration,
+                                                       modelName: recording.model.name, language: recording.settings.language,
+                                                       appBundleID: recording.target?.bundleIdentifier)
+            let record = DictationEvidence(transcript: transcript, modelID: recording.model.id,
+                                          settingsJSON: try JSONEncoder().encode(recording.settings), vocabulary: recording.vocabulary,
+                                          recognition: recognition, failure: failure,
+                                          appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
+                                          timings: sessionTimings)
+            try await evidenceStore.save(audioURL: recording.audio.url, record: record)
+            try Task.checkCancellation()
+            evidence = try await evidenceStore.records()
+            evidenceError = ""
+        } catch is CancellationError {
+            // A cancelled session must not leave retained audio behind.
+            let recordID = transcript?.id ?? id
+            try? await evidenceStore.delete(id: recordID)
+        } catch {
+            evidenceError = "Recording could not be saved: \(error.localizedDescription)"
+            if generation == (transcript?.id ?? id) { statusMessage = evidenceError }
+        }
+    }
+
+    func pinEvidence(_ record: DictationEvidence) {
+        Task {
+            do {
+                try await evidenceStore.setPinned(id: record.id, pinned: !record.pinned)
+                evidence = try await evidenceStore.records()
+            } catch { evidenceError = error.localizedDescription }
+        }
+    }
+
+    func playEvidence(_ record: DictationEvidence) {
+        let request = UUID()
+        playbackRequest = request
+        Task {
+            do {
+                let url = try await evidenceStore.audioURL(id: record.id)
+                guard playbackRequest == request, !isBusy else { return }
+                evidencePlayer?.stop()
+                evidencePlayer = try AVAudioPlayer(contentsOf: url)
+                guard evidencePlayer?.play() == true else { throw CocoaError(.fileReadUnknown) }
+            } catch { evidenceError = "Couldn’t play recording: \(error.localizedDescription)" }
+        }
+    }
+
+    func stopEvidencePlayback() {
+        playbackRequest = UUID()
+        evidencePlayer?.stop()
+    }
+
+    func deleteEvidence(_ record: DictationEvidence) {
+        Task {
+            do {
+                stopEvidencePlayback()
+                try await evidenceStore.delete(id: record.id)
+                evidence = try await evidenceStore.records()
+            } catch { evidenceError = error.localizedDescription }
+        }
+    }
+
+    func clearEvidence() {
+        Task {
+            do {
+                stopEvidencePlayback()
+                try await evidenceStore.clear()
+                evidence = []
+            } catch { evidenceError = error.localizedDescription }
+        }
+    }
+
+    func saveEvidenceReference(_ record: DictationEvidence, text: String) {
+        Task {
+            do {
+                try await evidenceStore.setReference(id: record.id, text: text, reviewed: true)
+                evidence = try await evidenceStore.records()
+            } catch { evidenceError = error.localizedDescription }
+        }
+    }
+
     func deleteTranscript(_ transcript: Transcript) {
         let previous = history
         history.removeAll { $0.id == transcript.id }
         do {
             try persist()
+            Task {
+                do {
+                    stopEvidencePlayback()
+                    try await evidenceStore.delete(id: transcript.id)
+                    evidence = try await evidenceStore.records()
+                } catch { evidenceError = "Text deleted, but recording could not be removed: \(error.localizedDescription)" }
+            }
             ToastWindow.shared.show(Toast(title: "Deleted", message: "The dictation was removed from history.", systemImage: "trash"))
         } catch {
             history = previous
@@ -1001,6 +1146,7 @@ final class AppModel {
     func requestMicrophone() {
         Task {
             microphoneGranted = await AVCaptureDevice.requestAccess(for: .audio)
+            if microphoneGranted { recorder.prepareMicrophone() }
             if !microphoneGranted {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
             }
@@ -1014,6 +1160,8 @@ final class AppModel {
 
     func refreshPermissions() {
         microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        if microphoneGranted { recorder.prepareMicrophone() }
+        else { recorder.invalidateMicrophonePreparation() }
         let previouslyGranted = accessibilityGranted
         accessibilityGranted = AXIsProcessTrusted()
         if previouslyGranted != accessibilityGranted, settings.shortcut.isModifierOnly, !isBusy { registerShortcut() }
@@ -1058,6 +1206,9 @@ final class AppModel {
     private func refreshMicrophones() {
         microphones = AudioInputs.available()
         automaticMicrophone = AudioInputs.systemDefault()
+        recorder.microphone = settings.microphone
+        recorder.invalidateMicrophonePreparation()
+        recorder.prepareMicrophone()
     }
 
     func dismissCard() {
@@ -1066,12 +1217,24 @@ final class AppModel {
         phase = .idle
     }
 
+    private func trace(_ event: String, _ fields: [String: String] = [:]) {
+        guard startsServices else { return }
+        var fields = fields
+        fields["session"] = generation.uuidString
+        fields["model"] = settings.selectedModelID
+        let uptime = ProcessInfo.processInfo.systemUptime
+        sessionTimings[event] = uptime
+        let date = Date()
+        Task { await DiagnosticLog.shared.record(event, fields: fields, uptime: uptime, date: date) }
+    }
+
     private func abandon(_ failure: DictationFailure) {
         discardRecording()
         fail(failure)
     }
 
     private func fail(_ failure: DictationFailure) {
+        trace("dictation.failed", ["title": failure.title, "message": failure.message])
         statusMessage = failure.message
         present(.failed(failure), for: 6)
         playFeedback(.attention)

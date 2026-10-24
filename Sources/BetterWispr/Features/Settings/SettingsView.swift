@@ -91,7 +91,7 @@ struct SettingsView: View {
                 }
 
                 SettingsSection("App") {
-                    SettingToggle("Show in Dock", caption: "When off, use the menu bar to open BetterWispr. Your dictation shortcut still works.", isOn: setting(\.showInDock))
+                    SettingToggle("Show in Dock", caption: "When off, use the menu bar to open वाणी. Your dictation shortcut still works.", isOn: setting(\.showInDock))
                     RowDivider()
                     SettingToggle("Dictation sounds", caption: "Soft cues when you finish, cancel or need attention. Quiet during meeting capture.", isOn: setting(\.soundEffects))
                     RowDivider()
@@ -101,9 +101,15 @@ struct SettingsView: View {
                     RowDivider()
                     SettingToggle("Detect meetings", caption: "Offer the notetaker when Zoom, Google Meet, Teams, a Slack huddle or another call starts using the microphone. Calls in a browser need Accessibility.", isOn: setting(\.detectMeetings))
                     RowDivider()
-                    SettingToggle("Open at login", caption: "Have BetterWispr ready when your Mac starts.", isOn: setting(\.launchAtLogin))
+                    SettingToggle("Open at login", caption: "Have वाणी ready when your Mac starts.", isOn: setting(\.launchAtLogin))
                     RowDivider()
                     SettingToggle("Save dictation history", caption: "Keep text on this Mac so you can find and reuse it.", isOn: setting(\.saveHistory))
+                    RowDivider()
+                    SettingToggle("Keep recent recordings", caption: "Save the latest 50 audio recordings and transcripts on this Mac. Pinned examples stay until you delete them. Cancelled recordings are discarded.", isOn: setting(\.retainDictationAudio))
+                    RowDivider()
+                    SettingRow("Saved recordings", caption: "Listen, pin mistakes, and save references you have checked against the audio.") {
+                        Button("Open History") { model.selectedPage = .history }
+                    }
                 }
 
                 SettingsSection("Permissions") {
@@ -111,7 +117,7 @@ struct SettingsView: View {
                     RowDivider()
                     PermissionStatusRow(title: "Accessibility", caption: "Needed for automatic paste and modifier-key shortcuts.", granted: model.accessibilityGranted, action: model.requestAccessibility)
                 } footer: {
-                    Label("Built-in models process speech on this Mac. A selected API connection sends audio to its endpoint. Temporary recordings are removed after processing; external providers control their own retention.", systemImage: "lock.shield")
+                    Label("Built-in models process speech on this Mac. A selected API connection sends audio to its endpoint. When Keep recent recordings is on, 50 audio/text pairs and pinned examples stay on this Mac. Otherwise temporary recordings are removed after processing. External providers control their own retention.", systemImage: "lock.shield")
                 }
 
                 SettingsSection("Voice commands") {
@@ -249,8 +255,9 @@ private struct ShortcutRecorder: View {
 
     private func capture(_ event: NSEvent) {
         let flags = event.modifierFlags
-        let modifiers = ShortcutModifiers(Self.modifierFlags.filter { flags.contains($0.flag) }.map(\.modifier))
+        var modifiers = ShortcutModifiers(Self.modifierFlags.filter { flags.contains($0.flag) }.map(\.modifier))
         guard event.type == .keyDown else { return modifiersChanged(to: modifiers, keyCode: Int(event.keyCode)) }
+        modifiers.remove(.function) // macOS also attaches this flag to ordinary F-key events.
         modifierCandidate = nil
         if Int(event.keyCode) == kVK_Escape, modifiers.isEmpty { return stop() }
         let key = Self.keyNames[Int(event.keyCode)] ?? event.characters(byApplyingModifiers: [])?.uppercased() ?? ""
@@ -270,9 +277,7 @@ private struct ShortcutRecorder: View {
             return stop()
         }
         modifierCandidate = nil
-        if keyCode == kVK_Function {
-            feedback = "Fn can’t be a shortcut. Try ⌥ alone or an F-key such as F5."
-        } else if held.isEmpty, !modifiers.isEmpty {
+        if held.isEmpty, !modifiers.isEmpty {
             feedback = nil
             if modifiers == DictationShortcut.modifier(for: UInt32(keyCode)), let key = Self.keyNames[keyCode] {
                 modifierCandidate = DictationShortcut(keyCode: UInt32(keyCode), modifiers: [], key: key)
@@ -284,12 +289,13 @@ private struct ShortcutRecorder: View {
     }
 
     private static let modifierFlags: [(flag: NSEvent.ModifierFlags, modifier: ShortcutModifiers)] = [
-        (.control, .control), (.option, .option), (.shift, .shift), (.command, .command)
+        (.control, .control), (.option, .option), (.shift, .shift), (.command, .command), (.function, .function)
     ]
 
     private static let keyNames: [Int: String] = [
         kVK_Control: "Left Control", kVK_RightControl: "Right Control", kVK_Option: "Left Option", kVK_RightOption: "Right Option",
         kVK_Shift: "Left Shift", kVK_RightShift: "Right Shift", kVK_Command: "Left Command", kVK_RightCommand: "Right Command",
+        kVK_Function: "Fn",
         kVK_Space: "Space", kVK_Return: "Return", kVK_Tab: "Tab", kVK_Delete: "Delete", kVK_ForwardDelete: "Forward Delete",
         kVK_Escape: "Esc", kVK_Home: "Home", kVK_End: "End", kVK_PageUp: "Page Up", kVK_PageDown: "Page Down",
         kVK_LeftArrow: "←", kVK_RightArrow: "→", kVK_UpArrow: "↑", kVK_DownArrow: "↓",

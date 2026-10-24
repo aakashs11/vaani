@@ -60,6 +60,7 @@ final class GlobalShortcut {
             case .option: .option
             case .shift: .shift
             case .command: .command
+            case .function: .function
             default: []
             }
             guard flags == ownFlag else { return }
@@ -72,7 +73,8 @@ final class GlobalShortcut {
         kVK_Control: NX_DEVICELCTLKEYMASK, kVK_RightControl: NX_DEVICERCTLKEYMASK,
         kVK_Option: NX_DEVICELALTKEYMASK, kVK_RightOption: NX_DEVICERALTKEYMASK,
         kVK_Shift: NX_DEVICELSHIFTKEYMASK, kVK_RightShift: NX_DEVICERSHIFTKEYMASK,
-        kVK_Command: NX_DEVICELCMDKEYMASK, kVK_RightCommand: NX_DEVICERCMDKEYMASK
+        kVK_Command: NX_DEVICELCMDKEYMASK, kVK_RightCommand: NX_DEVICERCMDKEYMASK,
+        kVK_Function: NX_SECONDARYFNMASK
     ]
 
     private func installHandler() -> Bool {

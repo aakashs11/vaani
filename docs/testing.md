@@ -996,3 +996,27 @@ were not exercised in this UI pass.
 - [ ] Separate language/accent/device groups and latency measurements. Record
   settings and model hashes; do not report another project's paper numbers as
   BetterWispr results.
+
+
+## Local dictation evidence
+
+Run `bash scripts/check-dictation-evidence.sh`. The focused harness builds the actual store and vocabulary source with the installed compiler without depending on Swift Testing. Full `swift test` must still be run when a complete compatible toolchain is available.
+
+## Silent microphone startup
+
+Build debug with `swift build --disable-sandbox -Xswiftc -DDISABLE_APPLE_INTELLIGENCE`, then run `python3 scripts/check-microphone-startup.py`. This links the production audio code and checks stopped preparation, one hardware start shared by dictation/meeting subscribers, independent detach, last-subscriber shutdown, cancellation during prepare/start, and lossless first-buffer delivery at 16/48 kHz. The cancellation test failed before the fix with “cancelled start must fail”.
+
+Run `python3 scripts/check-microphone-startup.py --activity` to read current recording bundle IDs through Core Audio. Verify the installed app is absent while idle, present during dictation, and absent after finish/cancel. A prepared stopped queue must never start capture. Check selected/default device changes and sleep/wake on actual hardware. These hardware checks are separate from the deterministic harness.
+
+The three pinned “Show me the table” failures from 23 October had original outputs “Give me the table.”, “Be the table.”, and “See the table?”. Final text matched original text with zero vocabulary changes. Their captures were 0.78–1.00 seconds long and request-to-ready times were 247–252 ms. These observations suggest testing first-word capture, but do not establish that clipping caused each substitution. Expected text is user-reported until audio review. Do not rewrite these common words globally.
+
+Manual checks after installing this feature:
+
+- Enable Keep recent recordings, dictate, and inspect History → Saved recordings. Listen to the audio and compare pre-boost, post-boost, and final text.
+- Pin one example, restart, and confirm it remains. Unpin, delete, and clear must follow the visible confirmation text.
+- Stop audio or leave History immediately after Play. Playback must not start afterward or during microphone capture.
+- Cancel dictation before and during recognition. No completed evidence remains. Undo and successfully transcribe a cancellation to create a new completed example.
+- Delete a just-created text row while archival completes. Audio must not reappear.
+- Inspect the old imported text history, search, and change pages. At most 50 rows should be rendered at once.
+- Toggle retention off. New audio must not be archived, and existing saved examples must remain until deleted explicitly.
+- Confirm Fn, microphone access, and exact-once paste after updating the ad-hoc signed app. macOS may require granting the updated bundle its existing permissions again.

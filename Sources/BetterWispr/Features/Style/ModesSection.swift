@@ -98,7 +98,7 @@ private struct WritingModeEditor: View {
                 } header: {
                     Text("Websites")
                 } footer: {
-                    Text("Works in Safari, Chrome, Arc, Brave, Edge and other supported browsers. BetterWispr reads the address through Accessibility when you start dictating, uses it only on this Mac to choose a mode, and never saves or sends it.")
+                    Text("Works in Safari, Chrome, Arc, Brave, Edge and other supported browsers. वाणी reads the address through Accessibility when you start dictating, uses it only on this Mac to choose a mode, and never saves or sends it.")
                 }
 
                 Section {
@@ -107,7 +107,7 @@ private struct WritingModeEditor: View {
                 } header: {
                     Text("Trigger words")
                 } footer: {
-                    Text("Say a trigger word at the start or end of a dictation to use this mode. BetterWispr removes it from the text, so pick a phrase you wouldn’t otherwise start or end a sentence with.")
+                    Text("Say a trigger word at the start or end of a dictation to use this mode. वाणी removes it from the text, so pick a phrase you wouldn’t otherwise start or end a sentence with.")
                 }
 
                 Section {

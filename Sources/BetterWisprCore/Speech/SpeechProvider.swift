@@ -66,11 +66,13 @@ public protocol SpeechProvider: AnyObject {
     func transcribe(audioURL: URL, language: String?, vocabulary: [String]) async throws -> String
     /// Vocabulary terms the provider itself corrected during the last transcription.
     var vocabularyFixes: Int { get }
+    var recognitionDetails: RecognitionDetails? { get }
     func cancel()
 }
 
 extension SpeechProvider {
     public var vocabularyFixes: Int { 0 }
+    public var recognitionDetails: RecognitionDetails? { nil }
 }
 
 extension SpeechModel {

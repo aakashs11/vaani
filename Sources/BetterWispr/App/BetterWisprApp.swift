@@ -6,7 +6,7 @@ struct BetterWisprApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        Window("BetterWispr", id: "dashboard") {
+        Window("वाणी", id: "dashboard") {
             ZStack {
                 if delegate.model.needsOnboarding {
                     OnboardingView(model: delegate.model)
@@ -50,12 +50,12 @@ struct BetterWisprApp: App {
             MenuContents(model: delegate.model)
         } label: {
             Label {
-                Text("BetterWispr")
+                Text("वाणी")
             } icon: {
                 if delegate.model.phase == .recording {
                     Image(systemName: "mic.fill")
                 } else {
-                    Image(nsImage: BrandGlyph.menuBarImage)
+                    Image(systemName: "waveform")
                 }
             }
         }
@@ -120,7 +120,7 @@ private struct MenuContents: View {
                 .disabled(!model.updater.canCheckForUpdates)
         }
         Divider()
-        Button("Quit BetterWispr") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
+        Button("Quit वाणी") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
     }
 
     private var status: String {
@@ -128,7 +128,7 @@ private struct MenuContents: View {
         case .recording: "Listening…"
         case .transcribing: "Transcribing…"
         case .preparing: "Preparing…"
-        case .idle, .failed, .unpasted, .cancelled, .completed: "BetterWispr: Ready"
+        case .idle, .failed, .unpasted, .cancelled, .completed: "वाणी: Ready"
         }
     }
 

@@ -1,5 +1,5 @@
 import Foundation
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !DISABLE_APPLE_INTELLIGENCE
 import FoundationModels
 #endif
 
@@ -62,7 +62,7 @@ public enum MeetingNotesGenerator {
     }
 
     private static var appleAvailability: NotesAvailability {
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && !DISABLE_APPLE_INTELLIGENCE
         if #available(macOS 26.0, *) {
             switch SystemLanguageModel.default.availability {
             case .available: return .available
@@ -73,7 +73,11 @@ public enum MeetingNotesGenerator {
             }
         }
         #endif
+        #if DISABLE_APPLE_INTELLIGENCE
+        return .unavailable("Apple Intelligence meeting summaries are unavailable in this local build.")
+        #else
         return .unavailable("Apple Intelligence needs macOS 26. Choose Claude Code, Codex, Ollama or an API connection in Models.")
+        #endif
     }
 
     /// `lowLatency` asks API and CLI models for minimal reasoning; meeting notes keep the default requests.
@@ -90,7 +94,7 @@ public enum MeetingNotesGenerator {
             return CLINotesModel(cli: cli, model: settings.cliModel(cli), instructions: instructions, lowLatency: lowLatency)
         case .apple: break
         }
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && !DISABLE_APPLE_INTELLIGENCE
         if #available(macOS 26.0, *) { return AppleNotesModel(instructions: instructions) }
         #endif
         throw MeetingNotesError.unavailable(appleAvailability.message)
@@ -101,7 +105,7 @@ public enum MeetingNotesGenerator {
         switch settings.notesSelection {
         case .ollama(let name): _ = try? await Ollama.send("chat", ["model": name, "messages": [], "options": ["num_ctx": Ollama.contextLength]], timeout: 60)
         case .apple:
-            #if canImport(FoundationModels)
+            #if canImport(FoundationModels) && !DISABLE_APPLE_INTELLIGENCE
             if #available(macOS 26.0, *), appleAvailability == .available {
                 LanguageModelSession(instructions: TranscriptPolisher.instructions).prewarm()
             }
@@ -206,7 +210,7 @@ public enum TranscriptChunker {
     }
 }
 
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !DISABLE_APPLE_INTELLIGENCE
 @available(macOS 26.0, *)
 @Generable
 struct GeneratedNotes {

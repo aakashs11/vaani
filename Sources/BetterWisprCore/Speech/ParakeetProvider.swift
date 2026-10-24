@@ -7,6 +7,7 @@ public final class ParakeetProvider: SpeechProvider {
     public var onProgress: (@MainActor @Sendable (Double) -> Void)?
     public var onPartialTranscript: (@MainActor @Sendable (String) -> Void)?
     public private(set) var vocabularyFixes = 0
+    public private(set) var recognitionDetails: RecognitionDetails?
     private let modelsDirectory: URL
     private var manager: AsrManager?
     private var loadedModelID: String?
@@ -224,13 +225,18 @@ public final class ParakeetProvider: SpeechProvider {
         let hint = Self.hint(for: language)
         let terms = loadedVersion != .tdtJa && (hint == nil || hint == .english) ? Self.boostingTerms(vocabulary) : []
         vocabularyFixes = 0
+        recognitionDetails = nil
         let task = Task {
             let text: String
             if let session = await self.boostingSession(for: terms) {
-                (text, self.vocabularyFixes) = try await Self.boostedTranscript(of: audioURL, language: hint, manager: manager, session: session)
+                let boosted = try await Self.boostedTranscript(of: audioURL, language: hint, manager: manager, session: session)
+                text = boosted.text
+                self.vocabularyFixes = boosted.fixes
+                self.recognitionDetails = boosted.details
             } else {
                 var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
                 text = try await manager.transcribe(audioURL, decoderState: &state, language: hint).text
+                self.recognitionDetails = RecognitionDetails(originalText: text)
             }
             try Task.checkCancellation()
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -280,7 +286,7 @@ public final class ParakeetProvider: SpeechProvider {
     @concurrent
     private nonisolated static func boostedTranscript(
         of audioURL: URL, language: Language?, manager: AsrManager, session: VocabularyBoostingSession
-    ) async throws -> (text: String, fixes: Int) {
+    ) async throws -> (text: String, fixes: Int, details: RecognitionDetails) {
         let samples = try AudioConverter().resampleAudioFile(audioURL)
         try Task.checkCancellation()
         var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
@@ -288,14 +294,15 @@ public final class ParakeetProvider: SpeechProvider {
         try Task.checkCancellation()
         guard language != nil || TranscriptCleaner.isEnglish(result.text, language: nil),
               let rescored = await session.rescore(text: result.text, tokenTimings: result.tokenTimings ?? [], audioSamples: samples),
-              rescored.wasModified else { return (result.text, 0) }
+              rescored.wasModified else { return (result.text, 0, RecognitionDetails(originalText: result.text)) }
         let candidates = rescored.replacements.compactMap { item in
             item.shouldReplace ? item.replacementWord.map { (original: item.originalWord, replacement: $0) } : nil
         }
         let spelling = await MainActor.run { candidates.map { isSpelledCorrectly($0.original) } }
         let replacements = zip(candidates, spelling).map { (original: $0.original, replacement: $0.replacement, keepsOriginal: keepsOriginal($0, spelledCorrectly: $1)) }
         let text = restoringPunctuation(original: result.text, rescored: rescored.text, replacements: replacements)
-        return (text, text == result.text ? 0 : replacements.count { $0.original != $0.replacement && !$0.keepsOriginal })
+        let changes = text == result.text ? [] : replacements.filter { $0.original != $0.replacement && !$0.keepsOriginal }.map { VocabularyChange(original: $0.original, replacement: $0.replacement) }
+        return (text, changes.count, RecognitionDetails(originalText: result.text, changes: changes))
     }
 
     @MainActor

@@ -12,7 +12,7 @@ struct AboutView: View {
             Section {
                 VStack(spacing: 10) {
                     BrandMark(size: 72)
-                    Text("BetterWispr").font(.title.weight(.semibold))
+                    Text("वाणी").font(.title.weight(.semibold))
                     Text("Version \(version)")
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -25,23 +25,8 @@ struct AboutView: View {
                 .padding(.vertical, 12)
             }
 
-            Section {
-                Toggle(isOn: $updater.automaticallyChecksForUpdates) {
-                    Text("Check for updates automatically")
-                    Text("Looks for a new release on GitHub once a day.")
-                }
-                Toggle(isOn: $updater.automaticallyDownloadsUpdates) {
-                    Text("Download and install automatically")
-                    Text("New versions install the next time BetterWispr quits.")
-                }
-                .disabled(!updater.automaticallyChecksForUpdates)
-                Button("Check for Updates…", action: updater.checkForUpdates)
-                    .disabled(!updater.canCheckForUpdates)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            } header: {
-                Text("Updates")
-            } footer: {
-                Text("Update checks contact GitHub only. They never include your audio or text.")
+            Section("Updates") {
+                Text("This personal build is updated from your Vaani project. Automatic upstream updates are disabled to preserve your customizations.")
                     .foregroundStyle(.secondary)
             }
 
@@ -61,7 +46,7 @@ struct AboutView: View {
             } header: {
                 Text("Open Source")
             } footer: {
-                Text("BetterWispr is free and open source under the Apache 2.0 license. If it saves you some typing, a star on GitHub helps others find it.")
+                Text("वाणी is your personal build of BetterWispr, free and open source under the Apache 2.0 license.")
                     .foregroundStyle(.secondary)
             }
 

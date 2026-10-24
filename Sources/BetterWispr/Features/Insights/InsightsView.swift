@@ -105,7 +105,7 @@ struct InsightsView: View {
 
     private func shareText(_ insights: UsageInsights) -> String {
         let totals = insights.current
-        return "\(insights.period.shareOpening) \(totals.words.formatted()) words with BetterWispr at \(totals.wordsPerMinute) words per minute, about \(formattedTime(totals.timeSaved)) faster than typing."
+        return "\(insights.period.shareOpening) \(totals.words.formatted()) words with वाणी at \(totals.wordsPerMinute) words per minute, about \(formattedTime(totals.timeSaved)) faster than typing."
     }
 }
 

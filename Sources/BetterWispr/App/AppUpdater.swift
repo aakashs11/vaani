@@ -27,18 +27,16 @@ final class AppUpdater: NSObject {
         }
     }
 
-    @ObservationIgnored private lazy var controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: self)
+    @ObservationIgnored private lazy var controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: self)
     @ObservationIgnored private var observation: NSKeyValueObservation?
     @ObservationIgnored private var relaunch: (() -> Void)?
 
     override init() {
         super.init()
-        observation = controller.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
-            MainActor.assumeIsolated { self?.canCheckForUpdates = updater.canCheckForUpdates }
-        }
+        // Upstream updates would overwrite this personal build's Fn support and diagnostics.
     }
 
-    func checkForUpdates() { controller.checkForUpdates(nil) }
+    func checkForUpdates() {}
 
     func installUpdate() {
         guard let relaunch else { return checkForUpdates() }

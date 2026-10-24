@@ -20,6 +20,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var autoPaste: Bool = true
     public var copyToClipboard: Bool = false
     public var saveHistory: Bool = true
+    /// Retain 50 recent audio/text pairs locally, plus explicitly pinned examples.
+    public var retainDictationAudio: Bool = false
     public var showCapsule: Bool = true
     /// Shows Parakeet's provisional words in the capsule while recording.
     public var showLiveText: Bool = true
@@ -102,6 +104,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         autoPaste = try container.decode(Bool.self, forKey: .autoPaste)
         copyToClipboard = try container.decodeIfPresent(Bool.self, forKey: .copyToClipboard) ?? false
         saveHistory = try container.decode(Bool.self, forKey: .saveHistory)
+        retainDictationAudio = try container.decodeIfPresent(Bool.self, forKey: .retainDictationAudio) ?? false
         showCapsule = try container.decode(Bool.self, forKey: .showCapsule)
         showLiveText = try container.decodeIfPresent(Bool.self, forKey: .showLiveText) ?? true
         soundEffects = try container.decodeIfPresent(Bool.self, forKey: .soundEffects) ?? true

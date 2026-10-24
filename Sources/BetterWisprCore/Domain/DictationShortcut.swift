@@ -9,9 +9,10 @@ public struct ShortcutModifiers: OptionSet, Codable, Hashable, Sendable {
     public static let shift = ShortcutModifiers(rawValue: 1 << 9)
     public static let option = ShortcutModifiers(rawValue: 1 << 11)
     public static let control = ShortcutModifiers(rawValue: 1 << 12)
+    public static let function = ShortcutModifiers(rawValue: UInt32(kEventKeyModifierFnMask))
 
     fileprivate static let names: [(modifier: ShortcutModifiers, symbol: String, spoken: String)] = [
-        (.control, "⌃", "Control"), (.option, "⌥", "Option"), (.shift, "⇧", "Shift"), (.command, "⌘", "Command")
+        (.control, "⌃", "Control"), (.option, "⌥", "Option"), (.shift, "⇧", "Shift"), (.command, "⌘", "Command"), (.function, "fn", "Fn")
     ]
 
     fileprivate var activeNames: [(modifier: ShortcutModifiers, symbol: String, spoken: String)] {
@@ -47,6 +48,7 @@ public struct DictationShortcut: Codable, Equatable, Sendable {
         case kVK_Option, kVK_RightOption: .option
         case kVK_Shift, kVK_RightShift: .shift
         case kVK_Command, kVK_RightCommand: .command
+        case kVK_Function: .function
         default: nil
         }
     }

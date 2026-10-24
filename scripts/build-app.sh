@@ -7,9 +7,9 @@ if [[ $# -gt 2 || ( "$configuration" != debug && "$configuration" != release ) |
     echo 'Usage: scripts/build-app.sh [debug|release] [arm64|x86_64]' >&2
     exit 2
 fi
-swift build -c "$configuration" --arch "$architecture" --product BetterWispr
+swift build -c "$configuration" --arch "$architecture" --product BetterWispr -Xswiftc -DDISABLE_APPLE_INTELLIGENCE
 binary_dir="$(swift build -c "$configuration" --arch "$architecture" --show-bin-path)"
-app="$binary_dir/BetterWispr.app"
+app="$binary_dir/Vaani.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 # SwiftPM checkout licenses/resources can be read-only after the first copy.
 chmod -R u+w "$app"
@@ -17,14 +17,15 @@ cp "$binary_dir/BetterWispr" "$app/Contents/MacOS/BetterWispr"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 version="$(tr -d '[:space:]' < VERSION)"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" -c "Set :CFBundleVersion $version" "$app/Contents/Info.plist"
-icon_sources=(Sources/BetterWispr/Design/BrandMark.swift scripts/render-app-icon.swift)
 icon=.build/AppIcon.icns
-if [[ ! -f "$icon" || "${icon_sources[0]}" -nt "$icon" || "${icon_sources[1]}" -nt "$icon" ]]; then
-    iconset="$(mktemp -d)/AppIcon.iconset"
-    swiftc -parse-as-library "${icon_sources[@]}" -o .build/render-app-icon
-    .build/render-app-icon "$iconset"
-    iconutil -c icns "$iconset" -o "$icon"
-fi
+iconset=.build/Vaani.iconset
+mkdir -p "$iconset"
+for size in 16 32 128 256 512; do
+    sips -z "$size" "$size" Design/vaani-icon-reference.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
+    double=$((size * 2))
+    sips -z "$double" "$double" Design/vaani-icon-reference.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset" -o "$icon"
 cp "$icon" "$app/Contents/Resources/AppIcon.icns"
 rm -rf "$app/Contents/Resources/Licenses" "$app/Contents/Resources/BetterWispr_BetterWispr.bundle" "$app/Contents/MacOS/FluidAudio_FluidAudio.bundle" "$app/Contents/MacOS/BetterWispr_BetterWispr.bundle" "$app/Contents/Frameworks/Sparkle.framework"
 ditto "$binary_dir/Sparkle.framework" "$app/Contents/Frameworks/Sparkle.framework"

@@ -5,6 +5,28 @@ import IOKit.hidsystem
 import Testing
 @testable import BetterWispr
 
+@Test @MainActor func globeDeliversOnePressAndReleaseAndRejectsModifiedPress() throws {
+    let listener = GlobalShortcut()
+    let shortcut = try #require(DictationShortcut(keyCode: UInt32(kVK_Function), modifiers: [], key: "Fn"))
+    var transitions: [Bool] = []
+    listener.onPress = { transitions.append(true) }
+    listener.onRelease = { transitions.append(false) }
+    func send(_ flags: NSEvent.ModifierFlags) throws {
+        let event = try #require(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: flags,
+                                                timestamp: 0, windowNumber: 0, context: nil, characters: "",
+                                                charactersIgnoringModifiers: "", isARepeat: false, keyCode: UInt16(kVK_Function)))
+        listener.handleModifierEvent(event, shortcut: shortcut)
+    }
+    try send([.function, .command])
+    try send(.command)
+    #expect(transitions.isEmpty)
+    try send(.function)
+    try send(.function)
+    try send(.command)
+    #expect(transitions == [true, false])
+    listener.unregister()
+}
+
 @Test @MainActor func standaloneOptionDeliversOnePressAndReleaseForTheRecordedSide() throws {
     let listener = GlobalShortcut()
     let shortcut = try #require(DictationShortcut(keyCode: UInt32(kVK_Option), modifiers: [], key: "Left Option"))

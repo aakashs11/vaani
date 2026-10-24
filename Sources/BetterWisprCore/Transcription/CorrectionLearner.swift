@@ -20,6 +20,7 @@ public enum CorrectionLearner {
         made got came took saw knew thought where why here very much many still too again
         off down never every own same another both each few more less last next while
         before through under between should might must being have that its yes okay
+        tell tall stall chart chat click scale skill safe save
         """.split(whereSeparator: \.isWhitespace).map(String.init))
 
     /// Returns word-level fixes the user made to dictated text, skipping rewrites and ordinary word swaps.

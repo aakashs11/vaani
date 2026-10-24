@@ -3,6 +3,17 @@ import AudioToolbox
 import Foundation
 import OSLog
 
+protocol MicrophoneHardware: AnyObject, Sendable {
+    var device: AudioInputDevice { get }
+    var deviceID: AudioDeviceID { get }
+    var format: AVAudioFormat { get }
+    var isRunning: Bool { get }
+    var error: (any Error)? { get }
+    func prepare(receive: @escaping @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void) async throws
+    func start() async throws
+    func stop()
+}
+
 /// A subscription to the one input stream per device that dictation and meetings share without stopping each other.
 @MainActor
 final class MicrophoneInput {
@@ -16,25 +27,32 @@ final class MicrophoneInput {
     var format: AVAudioFormat { source.hardware.format }
     var isRunning: Bool { attached && source.hardware.isRunning }
     var error: (any Error)? { source.hardware.error }
+    var isPrepared: Bool { source.isPrepared }
+    var isReusable: Bool { source.canReuse }
 
     init(choice: AudioInputDevice?) throws {
-        guard let device = AudioInputs.resolve(choice) else { throw AudioRecordingError.unavailable }
+        let captureDevice = try AudioInputs.captureDevice(choice)
+        let device = captureDevice.0
         Self.sources = Self.sources.filter { $0.value.value != nil }
-        if let existing = Self.sources[device.id]?.value, existing.canReuse {
+        if let existing = Self.sources[device.id]?.value,
+           existing.canReuse(deviceID: captureDevice.1, format: captureDevice.2) {
             source = existing
         } else {
-            source = Source(hardware: try AudioQueueMicrophone(choice: device))
+            source = Source(hardware: AudioQueueMicrophone(captureDevice: captureDevice))
             Self.sources[device.id] = WeakSource(value: source)
         }
     }
 
     isolated deinit { stop() }
 
-    func start(receive: @escaping MicrophoneDelivery.Receiver) async throws {
+    /// Configures a stopped queue. This does not start the microphone or register a recorder.
+    func prepare() async throws { try await source.prepare() }
+
+    func start(since: TimeInterval = ProcessInfo.processInfo.systemUptime, receive: @escaping MicrophoneDelivery.Receiver) async throws {
         guard !attached else { throw AudioRecordingError.alreadyRecording }
         attached = true
         do {
-            try await source.start(id: id, receive: receive)
+            try await source.start(id: id, since: since, receive: receive)
             try Task.checkCancellation()
         } catch {
             stop()
@@ -51,33 +69,62 @@ final class MicrophoneInput {
     private struct WeakSource { weak var value: Source? }
 
     @MainActor
-    private final class Source {
-        let hardware: AudioQueueMicrophone
+    final class Source {
+        let hardware: any MicrophoneHardware
         private let delivery = MicrophoneDelivery()
         private var preparation: Task<Void, any Error>?
+        private var startup: Task<Void, any Error>?
+        private var prepared = false
         private var subscribers: Set<UUID> = []
         private var started = false
         private var stopped = false
 
         var canReuse: Bool { !stopped && (!started || hardware.isRunning) && hardware.error == nil }
+        var isPrepared: Bool { prepared && !stopped && !started }
 
-        init(hardware: AudioQueueMicrophone) { self.hardware = hardware }
+        func canReuse(deviceID: AudioDeviceID, format: AVAudioFormat) -> Bool {
+            // Running meetings keep their output format while Core Audio converts device changes.
+            canReuse && hardware.deviceID == deviceID && (hardware.isRunning || hardware.format == format)
+        }
 
-        func start(id: UUID, receive: @escaping MicrophoneDelivery.Receiver) async throws {
+        init(hardware: any MicrophoneHardware) { self.hardware = hardware }
+
+        func prepare() async throws {
             guard !stopped else { throw AudioRecordingError.inputStalled }
-            subscribers.insert(id)
-            delivery.add(id, receive: receive)
             if preparation == nil {
                 let hardware = hardware, delivery = delivery
-                preparation = Task { try await hardware.start { delivery.receive($0, at: $1) } }
+                preparation = Task { try await hardware.prepare { delivery.receive($0, at: $1) } }
             }
+            try await preparation!.value
+            try Task.checkCancellation()
+            guard !stopped else { throw CancellationError() }
+            prepared = true
+        }
+
+        func start(id: UUID, since: TimeInterval, receive: @escaping MicrophoneDelivery.Receiver) async throws {
+            try Task.checkCancellation()
+            guard !stopped else { throw AudioRecordingError.inputStalled }
+            subscribers.insert(id)
+            delivery.add(id, since: since, receive: receive)
             do {
-                try await preparation!.value
-                started = true
-                guard !subscribers.isEmpty else { hardware.stop(); throw CancellationError() }
-                Logger(subsystem: "org.betterwispr.app", category: "MicrophoneCapture").notice("Attached to shared input: subscribers=\(self.subscribers.count)")
+                try await withTaskCancellationHandler {
+                    try await prepare()
+                    try Task.checkCancellation()
+                    guard !stopped, subscribers.contains(id) else { throw CancellationError() }
+                    if startup == nil {
+                        let hardware = hardware
+                        startup = Task { try await hardware.start() }
+                    }
+                    try await startup!.value
+                    started = true
+                    try Task.checkCancellation()
+                    guard subscribers.contains(id) else { throw CancellationError() }
+                    Logger(subsystem: "org.betterwispr.app", category: "MicrophoneCapture").notice("Attached to shared input: subscribers=\(self.subscribers.count)")
+                } onCancel: {
+                    Task { @MainActor in self.remove(id) }
+                }
             } catch {
-                stopped = true
+                remove(id)
                 throw error
             }
         }
@@ -87,7 +134,7 @@ final class MicrophoneInput {
             subscribers.remove(id)
             if subscribers.isEmpty {
                 stopped = true
-                if started { hardware.stop() }
+                if started { hardware.stop() } else { startup?.cancel() }
             }
         }
     }
@@ -128,7 +175,7 @@ final class MicrophoneDelivery: @unchecked Sendable {
 }
 
 /// Unchecked because awaiting start hands the queue to one caller, and only the locked Delivery crosses into Audio Queue callbacks.
-private final class AudioQueueMicrophone: @unchecked Sendable {
+private final class AudioQueueMicrophone: MicrophoneHardware, @unchecked Sendable {
     let device: AudioInputDevice
     let deviceID: AudioDeviceID
     let format: AVAudioFormat
@@ -136,9 +183,11 @@ private final class AudioQueueMicrophone: @unchecked Sendable {
     private let worker = DispatchQueue(label: "org.betterwispr.microphone", qos: .userInitiated)
     private let delivery = Delivery()
 
-    init(choice: AudioInputDevice?) throws {
-        (device, deviceID, format) = try AudioInputs.captureDevice(choice)
+    init(captureDevice: (AudioInputDevice, AudioDeviceID, AVAudioFormat)) {
+        (device, deviceID, format) = captureDevice
     }
+
+    deinit { stop() }
 
     var isRunning: Bool {
         guard let queue else { return false }
@@ -149,7 +198,7 @@ private final class AudioQueueMicrophone: @unchecked Sendable {
 
     /// The callback is explicitly Sendable so it never inherits MainActor isolation on the capture worker.
     @concurrent
-    func start(receive: @escaping @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void) async throws {
+    func prepare(receive: @escaping @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void) async throws {
         try Task.checkCancellation()
         let format = format
         let delivery = delivery
@@ -161,7 +210,7 @@ private final class AudioQueueMicrophone: @unchecked Sendable {
                 mData: buffer.pointee.mAudioData))
             if let pcm = AVAudioPCMBuffer(pcmFormat: format, bufferListNoCopy: &list, deallocator: nil), pcm.frameLength > 0 {
                 let timestamp = AVAudioTime(audioTimeStamp: time, sampleRate: format.sampleRate)
-                delivery.report(pcm, time: timestamp, since: started)
+                delivery.report(pcm, time: timestamp)
                 receive(pcm, timestamp)
             }
             if delivery.acceptsBuffers {
@@ -182,9 +231,24 @@ private final class AudioQueueMicrophone: @unchecked Sendable {
                 guard let buffer else { throw AudioRecordingError.unavailable }
                 try check(AudioQueueEnqueueBuffer(created, buffer, 0, nil))
             }
-            try check(AudioQueueStart(created, nil))
             try Task.checkCancellation()
-            Self.logger.notice("Started input queue: rate=\(format.sampleRate) channels=\(format.channelCount) setup=\(ProcessInfo.processInfo.systemUptime - started)s")
+            Self.logger.notice("Prepared stopped input queue: rate=\(format.sampleRate) channels=\(format.channelCount) setup=\(ProcessInfo.processInfo.systemUptime - started)s")
+        } catch {
+            stop()
+            throw error
+        }
+    }
+
+    @concurrent
+    func start() async throws {
+        try Task.checkCancellation()
+        guard let queue else { throw AudioRecordingError.unavailable }
+        let started = ProcessInfo.processInfo.systemUptime
+        delivery.beganCapture(at: started)
+        do {
+            try check(AudioQueueStart(queue, nil))
+            try Task.checkCancellation()
+            Self.logger.notice("Started prepared input queue: elapsed=\(ProcessInfo.processInfo.systemUptime - started)s")
         } catch {
             stop()
             throw error
@@ -213,6 +277,7 @@ private final class AudioQueueMicrophone: @unchecked Sendable {
         private let lock = NSLock()
         private var stopped = false
         private var failure: OSStatus = noErr
+        private var captureStarted: TimeInterval = 0
         private var firstBuffer = true
         private var firstSignal = true
 
@@ -225,7 +290,9 @@ private final class AudioQueueMicrophone: @unchecked Sendable {
             guard status != noErr else { return }
             lock.withLock { if !stopped { failure = status } }
         }
-        func report(_ buffer: AVAudioPCMBuffer, time: AVAudioTime, since started: TimeInterval) {
+        func beganCapture(at time: TimeInterval) { lock.withLock { captureStarted = time } }
+        func report(_ buffer: AVAudioPCMBuffer, time: AVAudioTime) {
+            let started = lock.withLock { captureStarted }
             guard firstBuffer || firstSignal else { return }
             let level = VoiceLevelMeter.slices(of: buffer).map(\.rms).max() ?? 0
             if firstBuffer || level > 0.00001 {

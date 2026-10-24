@@ -96,7 +96,7 @@ struct StyleView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.tertiary)
                             .accessibilityHidden(true)
-                        example("BetterWispr types", cleanedSample, emphasized: true)
+                        example("वाणी types", cleanedSample, emphasized: true)
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -237,7 +237,7 @@ struct StyleView: View {
     private static let screenContextCaption = "Sends your selected text, your clipboard and the text of the window you dictate into to your notes model with each Medium dictation, so it can spell what you see. Your notes model may be a cloud service. Nothing is read while a password field is active, and clipboard items marked as passwords are skipped."
 
     private var screenTextCaption: String {
-        let status = CGPreflightScreenCaptureAccess() ? "Screen Recording is allowed." : "Needs Screen Recording. Allow BetterWispr under Privacy & Security, Screen & System Audio Recording in System Settings, then reopen BetterWispr."
+        let status = CGPreflightScreenCaptureAccess() ? "Screen Recording is allowed." : "Needs Screen Recording. Allow वाणी under Privacy & Security, Screen & System Audio Recording in System Settings, then reopen वाणी."
         return "When an app shares too little text, reads its window from a screenshot on this Mac and sends that text to your notes model too, which may be a cloud service. \(status)"
     }
 

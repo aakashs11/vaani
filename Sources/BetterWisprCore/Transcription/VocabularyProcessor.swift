@@ -6,9 +6,12 @@ public enum VocabularyProcessor {
         corrected(entries, in: text).text
     }
 
-    /// The spellings to boost; spoken commands are left out because boosting them rewrites neighbouring words.
+    /// Boost spellings, not spoken commands, long expansions, or referral URLs that can distort neighbouring words.
     public static func hints(_ entries: [VocabularyEntry]) -> [String] {
-        entries.filter { !VoiceCommands.isSpokenCommand($0.replacement) }.map { $0.replacement.isEmpty ? $0.phrase : $0.replacement }
+        entries.filter {
+            !VoiceCommands.isSpokenCommand($0.replacement)
+                && $0.replacement.count <= 100 && !$0.replacement.contains("://")
+        }.map { $0.replacement.isEmpty ? $0.phrase : $0.replacement }
     }
 
     /// Applies only the entries written as a spoken command, so "Kocia Mark" can become "question mark" before voice commands run.

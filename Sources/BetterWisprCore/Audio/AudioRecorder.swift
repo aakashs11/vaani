@@ -31,8 +31,19 @@ public final class AudioRecorder {
     public var silenceThreshold: Float = 0.002
     /// Nil uses Automatic.
     public var microphone: AudioInputDevice? {
-        didSet { if recordingID != nil { inputObserver?.scheduleCheck() } }
+        didSet {
+            guard oldValue != microphone else { return }
+            invalidateMicrophonePreparation()
+            if recordingID != nil { inputObserver?.scheduleCheck() }
+            else { prepareMicrophone() }
+        }
     }
+    private var preparedInput: MicrophoneInput?
+    private var preparationObserver: AudioInputObserver?
+    private var preparation: Task<Void, Never>?
+    private var preparationID = UUID()
+    public var hasPreparedMicrophone: Bool { preparedInput?.isPrepared == true }
+    private var requestedAt: TimeInterval = 0
     private var changingInput = false
     private var input: MicrophoneInput?
     private var inputObserver: AudioInputObserver?
@@ -49,9 +60,49 @@ public final class AudioRecorder {
 
     public init() {}
 
+    /// Allocate a stopped queue while idle. No microphone samples are captured here.
+    public func prepareMicrophone() {
+        if preparedInput?.isReusable == false { invalidateMicrophonePreparation() }
+        guard recordingID == nil, !starting, !changingInput, preparedInput == nil, preparation == nil,
+              AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
+        let token = UUID(), choice = microphone
+        preparationID = token
+        preparation = Task { [weak self] in
+            defer { if self?.preparationID == token { self?.preparation = nil } }
+            do {
+                let input = try MicrophoneInput(choice: choice)
+                try await input.prepare()
+                try Task.checkCancellation()
+                guard let self, self.preparationID == token else { return }
+                self.preparedInput = input
+                if self.recordingID == nil {
+                    let observer = AudioInputObserver { [weak self] in
+                        guard let self, self.recordingID == nil else { return }
+                        self.invalidateMicrophonePreparation()
+                        self.prepareMicrophone()
+                    }
+                    observer.observeDevice(input.deviceID)
+                    self.preparationObserver = observer
+                }
+            } catch {
+                // Dictation retries the normal capture path if idle preparation fails.
+            }
+        }
+    }
+
+    public func invalidateMicrophonePreparation() {
+        preparationID = UUID()
+        preparationObserver?.cancel()
+        preparationObserver = nil
+        preparation?.cancel()
+        preparation = nil
+        preparedInput = nil
+    }
+
     /// `onSamples` receives 16 kHz mono copies of each buffer on the capture worker; the recorded file is unchanged.
-    public func start(onSamples: (@Sendable ([Float]) -> Void)? = nil) async throws {
+    public func start(onSamples: (@Sendable ([Float]) -> Void)? = nil, since requestedAt: TimeInterval = ProcessInfo.processInfo.systemUptime) async throws {
         guard writer == nil, !starting, !changingInput else { throw AudioRecordingError.alreadyRecording }
+        self.requestedAt = requestedAt
         starting = true
         defer { starting = false }
         let id = UUID()
@@ -65,6 +116,11 @@ public final class AudioRecorder {
         try Task.checkCancellation()
         guard recordingID == id else { throw CancellationError() }
         guard allowed else { throw AudioRecordingError.permissionDenied }
+        if let preparation { await preparation.value }
+        preparationObserver?.cancel()
+        preparationObserver = nil
+        try Task.checkCancellation()
+        guard recordingID == id else { throw CancellationError() }
         recordingURL = FileManager.default.temporaryDirectory.appending(path: "betterwispr-\(UUID().uuidString).caf")
         meter = VoiceLevelMeter()
         tap = onSamples.map(LiveSampleTap.init)
@@ -112,10 +168,12 @@ public final class AudioRecorder {
             try? FileManager.default.removeItem(at: url)
             throw SpeechError.emptyAudio
         }
+        prepareMicrophone()
         return RecordedAudio(url: url, duration: result.duration, hasSpeech: result.hasSpeech)
     }
 
     public func cancel() {
+        invalidateMicrophonePreparation()
         haltMicrophone()
         _ = writer?.finish()
         if let recordingURL { try? FileManager.default.removeItem(at: recordingURL) }
@@ -127,14 +185,18 @@ public final class AudioRecorder {
         guard let url = recordingURL, let progress else { throw AudioRecordingError.notRecording }
         changingInput = true
         defer { changingInput = false }
-        let input = try MicrophoneInput(choice: microphone)
+        if preparedInput?.isReusable == false { preparedInput = nil }
+        let wasPrepared = preparedInput != nil
+        let input = try preparedInput ?? MicrophoneInput(choice: microphone)
+        preparedInput = nil
+        Logger(subsystem: "org.betterwispr.app", category: "MicrophoneCapture").notice("Reusing stopped prepared input: \(wasPrepared)")
         let format = input.format
         let writer = try self.writer ?? RecordingWriter(url: url, format: format, threshold: silenceThreshold)
         let sampleRate = format.sampleRate
         let capture = progress.begin()
         let tap = tap
         inputObserver?.observeDevice(input.deviceID)
-        try await input.start { @Sendable [weak self] buffer, time in
+        try await input.start(since: requestedAt) { @Sendable [weak self] buffer, time in
             let end = AudioCaptureProgress.endTime(time, frames: buffer.frameLength, sampleRate: sampleRate)
             let loudness = writer.write(buffer)
             tap?.receive(buffer)
