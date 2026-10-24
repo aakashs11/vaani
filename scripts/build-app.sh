@@ -55,6 +55,9 @@ for resource in "$binary_dir"/*.bundle; do
     [[ "$(basename "$resource")" == FluidAudio_* ]] && continue
     cp -R "$resource" "$app/Contents/MacOS/"
 done
+# Store both names as Spotlight aliases while keeping the English bundle filename.
+aliases="$(python3 -c 'import plistlib; print(plistlib.dumps(["Vaani", "वाणी"], fmt=plistlib.FMT_BINARY).hex())')"
+xattr -w -x com.apple.metadata:kMDItemAlternateNames "$aliases" "$app"
 identity="${CODESIGN_IDENTITY:--}"
 if [[ "$identity" == - ]]; then
     echo 'Development build: ad-hoc signed. macOS permissions may need renewal after rebuilding.' >&2

@@ -28,7 +28,7 @@ echo "$app"''')
     (template/'Resources/AppIcon.icns').write_bytes(b'icon')
     for name in ('Vaani-GPL-3.0.txt','BetterWispr-Apache-2.0.txt','THIRD_PARTY_NOTICES.md','Vaani-Provenance.md','Adapted-Code-Notices.txt','Argmax-MIT.txt','FluidAudio-Apache-2.0.txt'):
         (template/'Resources/Licenses'/name).write_bytes(b'x'*35149)
-    valid={'CFBundleIdentifier':'io.github.aakashs11.vaani','CFBundleName':'Vaani','CFBundleExecutable':'Vaani','NSMicrophoneUsageDescription':'Vaani records only after start.'}
+    valid={'CFBundleIdentifier':'io.github.aakashs11.vaani','CFBundleName':'Vaani','CFBundleDisplayName':'Vaani (वाणी)','CFBundleExecutable':'Vaani','NSMicrophoneUsageDescription':'Vaani records only after start.'}
     env=dict(os.environ,PATH=str(root/'bin')+':'+os.environ['PATH'],SIGNING_IDENTITY='Developer ID Application: Test Owner (TESTTEAM)',APPLE_TEAM_ID='TESTTEAM',NOTARY_PROFILE='test-profile')
     def run(**overrides):
         shutil.rmtree(root/'.build',ignore_errors=True)

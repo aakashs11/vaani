@@ -6,6 +6,7 @@ app=Path(sys.argv[1]).resolve()
 info=plistlib.loads((app/'Contents/Info.plist').read_bytes())
 assert info['CFBundleIdentifier']=='io.github.aakashs11.vaani'
 assert info['CFBundleName']=='Vaani' and info['CFBundleExecutable']=='Vaani'
+assert info['CFBundleDisplayName']=='Vaani (वाणी)'
 assert (app/'Contents/MacOS/Vaani').is_file()
 assert not (app/'Contents/MacOS/BetterWispr').exists(), 'Stale upstream executable in generated bundle'
 assert (app/'Contents/Resources/AppIcon.icns').stat().st_size>0
