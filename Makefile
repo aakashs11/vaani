@@ -1,6 +1,6 @@
 SHELL := /bin/bash -o pipefail
 
-APP_NAME     = BetterWispr
+APP_NAME     = Vaani
 DERIVED_DIR  = .build
 APP_DEBUG    = $(DERIVED_DIR)/debug/$(APP_NAME).app
 APP_RELEASE  = $(DERIVED_DIR)/release/$(APP_NAME).app
@@ -8,7 +8,7 @@ VERSION     := $(shell tr -d '[:space:]' < VERSION)
 DMG_NAME     = $(APP_NAME)-$(VERSION).dmg
 DMG_DIR      = release
 MODEL       ?= parakeet-v3
-CLI          = $(DERIVED_DIR)/debug/BetterWisprCLI
+CLI          = $(DERIVED_DIR)/debug/VaaniCLI
 NO_NET       = sandbox-exec -p '(version 1) (allow default) (deny network*)'
 SAMPLES      = $(DERIVED_DIR)/samples
 
@@ -19,10 +19,10 @@ help: ## Show this help
 
 dev: test run ## Local testing: build, run all checks, then launch the debug app
 
-setup-notary: ## Save BetterWispr notarization credentials in Keychain (once)
+setup-notary: ## Save Vaani notarization credentials in Keychain (once)
 	@bash scripts/release.sh --setup-notary
 
-ship: ## Build, sign, notarize and staple separate Apple Silicon and Intel DMGs
+ship: ## Build, sign, notarize and staple an Apple Silicon Vaani DMG
 	@bash scripts/release.sh
 
 build: ## Debug app bundle
@@ -40,17 +40,20 @@ run: build ## Build and launch (debug)
 	@open -n "$(abspath $(APP_DEBUG))"
 
 test: ## Unit tests, evaluator and release script checks
-	@swift build 2>&1 | tail -1
-	@swift test 2>&1 | tail -1
+	@swift build -Xswiftc -DDISABLE_APPLE_INTELLIGENCE 2>&1 | tail -1
+	@swift test -Xswiftc -DDISABLE_APPLE_INTELLIGENCE 2>&1 | tail -1
 	@python3 Tests/evaluate_check.py
 	@python3 Tests/release_check.py
+	@python3 scripts/check-identity-migration.py
+	@bash scripts/check-dictation-evidence.sh
+	@python3 scripts/check-microphone-startup.py
 
 lint: ## Check for compiler warnings
 	@echo "==> Checking for warnings..."
 	@swift build 2>&1 | grep -E "warning:|error:" || echo "No warnings."
 
 offline-test: ## Download MODEL, then transcribe speech and silence with networking denied
-	@swift build --product BetterWisprCLI 2>&1 | tail -1
+	@swift build --product VaaniCLI 2>&1 | tail -1
 	@$(CLI) --download-model $(MODEL)
 	@mkdir -p $(SAMPLES)
 	@test -f $(SAMPLES)/jfk.wav || curl -fsSL https://raw.githubusercontent.com/ggml-org/whisper.cpp/master/samples/jfk.wav -o $(SAMPLES)/jfk.wav

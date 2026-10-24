@@ -1,3 +1,9 @@
+# Vaani provenance note
+
+This file preserves BetterWispr's detailed reuse ledger as inherited at the base commit. Historical BetterWispr source paths now map to the corresponding Vaani paths. The original project's Apache designation below describes its own code, not the combined Vaani derivative. Vaani retains the documented GPL-derived adaptations and distributes the combined work under GPL-3.0-only, with all original notices retained. See [Vaani provenance](provenance.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+
+---
+
 # Open-source provenance
 
 Reviewed 2026-10-08. BetterWispr's original code remains Apache-2.0. Third-party

@@ -1,6 +1,6 @@
 import AVFoundation
 import Foundation
-@testable import BetterWisprCore
+@testable import VaaniCore
 
 @main struct MicrophoneStartupCheck {
     @MainActor static func main() async throws {

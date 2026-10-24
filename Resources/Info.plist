@@ -2,23 +2,40 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key><string>org.betterwispr.app</string>
-    <key>CFBundleName</key><string>वाणी</string>
-    <key>CFBundleDisplayName</key><string>वाणी</string>
-    <key>CFBundleExecutable</key><string>BetterWispr</string>
-    <key>CFBundleIconFile</key><string>AppIcon</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
-    <key>LSMinimumSystemVersion</key><string>14.0</string>
-    <key>LSUIElement</key><true/>
-    <key>NSHighResolutionCapable</key><true/>
-    <key>NSAudioCaptureUsageDescription</key><string>BetterWispr records the other side of a meeting when you start meeting notes. Audio is processed on this Mac or sent to the API connection you select. Temporary recordings are deleted afterwards.</string>
-    <key>NSMicrophoneUsageDescription</key><string>BetterWispr records your microphone when you start dictation. Audio is processed on this Mac or sent to the API connection you select. Temporary recordings are deleted afterwards.</string>
-    <key>NSSpeechRecognitionUsageDescription</key><string>BetterWispr uses Apple's on-device speech recognition only when you choose the Apple model. Cloud recognition is never enabled.</string>
-    <key>NSAppTransportSecurity</key>
-    <dict><key>NSAllowsLocalNetworking</key><true/></dict>
-    <key>SUFeedURL</key><string>https://github.com/opennookorg/betterwispr/releases/latest/download/appcast.xml</string>
-    <key>SUPublicEDKey</key><string>QAcU47kj1MAVrne6SZCZ9c8XhIE0pOP/v3dCIEn+wH0=</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.aakashs11.vaani</string>
+	<key>CFBundleName</key>
+	<string>Vaani</string>
+	<key>CFBundleDisplayName</key>
+	<string>Vaani</string>
+	<key>CFBundleExecutable</key>
+	<string>Vaani</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Vaani records the other side of a meeting when you start meeting notes. Audio is processed on this Mac or sent to the API connection you select. Temporary recordings are deleted afterwards.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Vaani records your microphone only when you start dictation. Local models process speech on this Mac. A selected API connection sends audio to that provider. If you enable saved recordings, audio is kept locally until retention or deletion removes it.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Vaani uses Apple's on-device speech recognition only when you choose the Apple model. Cloud recognition is never enabled.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>CFBundleSpokenName</key>
+	<string>Vaani</string>
 </dict>
 </plist>

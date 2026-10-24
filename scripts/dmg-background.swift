@@ -1,3 +1,4 @@
+// Vaani modification, 2026: product identity and compatibility; see docs/provenance.md.
 import AppKit
 import SwiftUI
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Vaani modification, 2026: product identity and compatibility; see docs/provenance.md.
 """Print the GitHub release notes for a version from CHANGELOG.md."""
 import re
 import sys

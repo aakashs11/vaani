@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Vaani modification, 2026: product identity and compatibility; see docs/provenance.md.
 """Score local JSONL reference/hypothesis pairs; see docs/accuracy.md."""
 
 import argparse

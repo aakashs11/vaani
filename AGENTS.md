@@ -1,9 +1,9 @@
-# Working on BetterWispr
+# Working on Vaani
 
 Native macOS 14+ dictation app; Swift 6.2+, SwiftUI/AppKit, Swift Package Manager.
-`BetterWispr` owns app composition, feature views and design components.
-`BetterWisprCore` owns domain types, persistence, audio, speech providers,
-transcription and OS integrations. `BetterWisprCLI` reuses its Whisper provider
+`Vaani` owns app composition, feature views and design components.
+`VaaniCore` owns domain types, persistence, audio, speech providers,
+transcription and OS integrations. `VaaniCLI` reuses its Whisper provider
 for file/model smoke tests. See `docs/architecture.md` before reorganizing.
 
 - Read the affected flow and callers before editing. Reuse the existing recorder,
@@ -38,7 +38,7 @@ Keep BetterShot-specific screenshot behavior out of this app.
 
 Run `swift build` and `swift test` for Swift changes. Run
 `python3 Tests/evaluate_check.py` when changing evaluation/normalization.
-`./scripts/build-app.sh` creates `.build/debug/BetterWispr.app`;
+`./scripts/build-app.sh` creates `.build/debug/Vaani.app`;
 `./scripts/run.sh` launches the bundle. Follow `docs/testing.md` for permission,
 microphone, global shortcut, paste, cancellation and offline model checks.
 Distinguish automated checks from OS behavior that has not been exercised.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Vaani modification, 2026: product identity and compatibility; see docs/provenance.md.
 """Prepare a new workspace from private backups. Never modifies a live app."""
 import argparse
 import datetime as dt

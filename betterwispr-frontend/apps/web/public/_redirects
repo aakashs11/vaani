@@ -1,2 +1,0 @@
-/compare /blog 301
-/compare/* /blog/:splat 301

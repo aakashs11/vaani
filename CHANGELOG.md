@@ -1,3 +1,21 @@
+# Vaani changes
+
+## Unreleased — Vaani identity transition
+
+- Rename native products, bundle metadata, permissions, packaging, and support destinations to Vaani.
+- Preserve legacy data through a validated staged migration with conflict checks and a retained original copy.
+- Preserve existing shortcut/model/retention settings and lazily migrate Keychain credentials.
+- Add visible BetterWispr authorship credits, a provenance/change table, and bundled licenses.
+- Remove upstream update-feed/signing defaults and archive the unused inherited website outside the active app project.
+
+The Vaani working baseline also includes Fn/Globe and Right Command support, legacy history/vocabulary import, bounded diagnostic logging, optional recording review, history pagination, and capture/vocabulary safeguards. These do not establish improved recognition accuracy.
+
+---
+
+# Historical BetterWispr changelog
+
+The entries below are inherited upstream release history. They describe BetterWispr releases, not Vaani releases.
+
 # Changelog
 
 All notable changes to BetterWispr are listed here. The format follows

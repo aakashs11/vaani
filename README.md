@@ -1,78 +1,55 @@
-<div align="center">
+# Vaani (वाणी)
 
-![BetterWispr: hold to talk, release to type](docs/assets/hero.png)
+Vaani is a native macOS dictation app maintained by Aakash. Hold your shortcut, speak, and release to insert text into the app you were using. Built-in speech models run locally. No account or subscription is required for local dictation.
 
-# BetterWispr
+## Origin and changes
 
-**Free, open-source voice dictation for macOS.** Hold **⌥ Space**, speak, release, and the text lands in whatever app you were typing in.
+Vaani is based on [BetterWispr](https://github.com/opennookorg/betterwispr), originally created by Kartik Labhshetwar and developed with its contributors. It retains BetterWispr's native application, model integrations, and much of its editing and meeting functionality. Original authorship and third-party acknowledgements are preserved.
 
-BetterWispr is a private, offline speech-to-text app and an open-source alternative to Wispr Flow. It transcribes on your Mac with Whisper, NVIDIA Parakeet or Apple's on-device speech recognition, so your voice never leaves your computer unless you add an API connection yourself.
+Vaani adds a separate product identity, Fn/Globe and Right Command shortcuts, legacy history/vocabulary import tooling, bounded diagnostics, optional saved-recording review, history pagination, capture-startup safeguards, and more conservative vocabulary handling. The rebrand coordinates executable names, packaging, storage migration, and owner-controlled release configuration.
 
-[Download the latest release](https://github.com/opennookorg/betterwispr/releases/latest) · [Website](https://betterwispr.com) · [Changelog](CHANGELOG.md)
+The [origin and changes table](docs/provenance.md) explains inherited features and Vaani modifications in detail. Vaani uses existing Whisper and NVIDIA Parakeet models through WhisperKit and FluidAudio. It does not claim to have trained a new model or proven higher recognition accuracy.
 
-</div>
+## Build and run
 
-## Features
+Requires a compatible macOS development toolchain with Swift 6.2 or later. The package targets macOS 14+, with Apple Silicon as the initial release target. Actual model availability depends on hardware and language. Full Swift tests need a toolchain that includes Swift Testing and its Foundation support.
 
-- **Dictate anywhere**: hold-to-talk or press-to-toggle, with a shortcut you choose.
-- **On-device models**: Apple speech, Parakeet v3 (25 European languages), Parakeet v2 (English) and Whisper large-v3 turbo.
-- **Vocabulary**: spelling hints and phrase replacements for names and jargon.
-- **Learns your corrections**: fix a misheard word once (in History, or right after it's pasted) and it's spelled right next time.
-- **Voice commands**: say "comma", "new line", "scratch that" or "sorry, remove that", and "at the rate KV" for "@KV".
-- **Meetings**: live transcript of you and the other side, plus on-device titles, summaries and action items with Apple Intelligence or a local Ollama model.
-- **History**: raw and corrected transcripts, stored locally (can be turned off).
-- **Bring your own model**: optional Sarvam AI, Smallest AI or any OpenAI-compatible endpoint.
+```sh
+git clone https://github.com/aakashs11/vaani.git
+cd vaani
+make build
+make run
+```
 
-## Requirements
+`bash scripts/build-app.sh release arm64` creates a development bundle and prints its path. Build products live under `.build`. Development bundles use ad-hoc signing unless `CODESIGN_IDENTITY` is explicitly supplied, so macOS may require renewed permissions after a rebuild. Do not disable Gatekeeper. A public notarized download is a separate release milestone and is not implied by a successful source build.
 
-- macOS 14 or later
-- Apple Silicon recommended
+The current build disables optional Apple Intelligence meeting notes at compile time for compatibility with the available toolchain. Local speech recognition and other explicitly selected notes providers remain available.
 
-## Getting started
+## First use
 
-1. Download the DMG from [Releases](https://github.com/opennookorg/betterwispr/releases/latest) and drag BetterWispr to Applications.
-2. Open it and follow the welcome guide.
-3. Pick a model in **Models**. Apple on-device needs no download; Parakeet and Whisper download once, then work offline.
-4. Grant **Microphone** access, and **Accessibility** access so BetterWispr can paste for you.
-5. Click into a text field in any app, hold **⌥ Space**, speak, and release.
+1. Open Vaani, grant Microphone access, and grant Accessibility access for automatic insertion. Apple speech also needs Speech Recognition permission.
+2. Install a speech model explicitly in Models. Model files use local storage and retain their publisher's terms.
+3. Choose your dictation shortcut in Settings. Right Command and Fn/Globe are supported. For Fn/Globe, set macOS “Press Globe key to” to “Do Nothing.” Existing installations retain their saved shortcut.
+4. Hold the shortcut and wait for the recording bars before speaking. Release to finish. A quick tap can start hands-free recording and another tap finishes it. Escape cancels.
 
-If paste can't safely reach the previous app, the text is copied to your
-clipboard instead, so you never lose a dictation. Recordings stop automatically
-after two minutes.
+Recognition can mishear words, names, numbers, and the opening of speech. Review consequential text before using it. With the microphone off between dictations, audio spoken before hardware activation cannot be recovered.
 
-## Bring your own model
+## Existing BetterWispr installations
 
-**Models → Bring your own model → Add connection.** Choose a provider, enter the
-model ID and API key, save, then click **Use**.
+Vaani copies and validates legacy app-owned data into `~/Library/Application Support/Vaani` before opening its stores. It preserves the original folder, settings, IDs, history, vocabulary, models, meetings, and saved-recording references. Existing model markers remain compatible. If both folders conflict or validation fails, Vaani stops with a recovery message instead of creating an empty replacement workspace. It never silently merges unrelated folders.
 
-| Provider | Default model | Notes |
-| --- | --- | --- |
-| Sarvam AI | `saaras:v4` | Long recordings are sent in 25-second chunks |
-| Smallest AI | `pulse` | Set an explicit spoken language in Settings |
-| OpenAI-compatible | any | Full URL, e.g. `http://localhost:8000/v1/audio/transcriptions`. HTTPS required except on localhost |
+The new bundle identity is `io.github.aakashs11.vaani`. macOS may require permission renewal. Legacy API credentials are copied through Keychain on first use, with original entries retained. See [migration and recovery](docs/maintenance.md).
 
-When a connection is in use, your audio goes to that endpoint and its pricing
-and retention policies apply. Keys are stored in the macOS Keychain. Switch back
-to a built-in model to return to fully local transcription. BetterWispr never
-falls back to a cloud provider on its own.
+## Privacy and support
 
-## Privacy
+Local models do not upload audio. An explicitly selected remote speech provider receives audio, and an explicitly selected remote editing/notes provider receives relevant text and enabled context. There is no automatic cloud fallback.
 
-- Settings, vocabulary and history live in `~/Library/Application Support/BetterWispr/workspace.json` (not encrypted).
-- Models live in the `Models` folder next to it.
-- Audio is written to temporary files and deleted after each recording.
-- Built-in models only touch the network when you explicitly download one.
+History is local and unencrypted. Saved recordings are optional. When enabled, Vaani keeps recent recordings plus pinned examples. Pins remain until deleted. Diagnostics contain bounded event/timing metadata rather than audio or transcript text. Read the [privacy details](docs/privacy.md).
 
-## Troubleshooting
+Report Vaani issues in [this repository](https://github.com/aakashs11/vaani/issues). Include your app version, macOS version, model, approximate failure time, and redacted details. Do not attach your complete workspace, private recordings, credentials, or transcript archive. Automatic upstream binary updates are disabled so they cannot replace Vaani customizations.
 
-- **Paste stopped working after an update or rebuild**: remove and re-add BetterWispr in System Settings → Privacy & Security → Accessibility.
-- **Apple on-device model unavailable**: your language or OS speech assets may not support it. Install Parakeet or Whisper instead.
-- **First transcription is slow**: large models take time to load the first time.
+## Development and licenses
 
-## Contributing
+Run `make test` for build, Swift tests, and focused preservation/packaging checks. See [testing](docs/testing.md), [architecture](docs/architecture.md), and [contributing](CONTRIBUTING.md).
 
-Build instructions, project layout and guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-[Apache-2.0](LICENSE). Third-party code and model weights keep their own terms;
+The combined Vaani derivative uses [GPL-3.0-only](LICENSE), reflecting retained GPL-derived adaptations. Original BetterWispr code retains its [Apache-2.0 license](LICENSES/BetterWispr-Apache-2.0.txt). Other components and model weights retain their own terms. See [third-party notices](THIRD_PARTY_NOTICES.md) and the [detailed upstream reuse ledger](docs/oss-reuse.md). The app bundles readable license and provenance files.

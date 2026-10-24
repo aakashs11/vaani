@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Score `BetterWisprCLI --meeting` output against speaker-timed references; see docs/accuracy.md."""
+# Vaani modification, 2026: product identity and compatibility; see docs/provenance.md.
+"""Score `VaaniCLI --meeting` output against speaker-timed references; see docs/accuracy.md."""
 
 import argparse
 import json

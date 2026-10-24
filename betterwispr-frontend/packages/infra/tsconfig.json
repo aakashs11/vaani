@@ -1,4 +1,0 @@
-{
-  "extends": "@betterwispr-frontend/config/tsconfig.base.json",
-  "include": ["alchemy.run.ts"]
-}

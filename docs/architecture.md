@@ -1,11 +1,11 @@
 # Architecture and extension points
 
-BetterWispr is one Swift package with a `BetterWispr` macOS executable,
-`BetterWisprCore` library and `BetterWisprCLI` developer executable. The app owns
+Vaani is one Swift package with a `Vaani` macOS executable,
+`VaaniCore` library and `VaaniCLI` developer executable. The app owns
 presentation and session coordination. The library owns recording, speech
 engines, local storage and delivery to other apps. The CLI reuses the local
 Whisper provider for explicit model installation and audio-file transcription.
-`BetterWisprCoreTests` checks shared behavior.
+`VaaniCoreTests` checks shared behavior.
 
 This is a native macOS application. Core includes platform frameworks where
 needed; it is not a promise of Linux/iOS portability. Feature folders are source
@@ -13,11 +13,11 @@ organization, not separate packages or a plugin loader.
 
 ```text
 Sources/
-  BetterWispr/
+  Vaani/
     App/              Lifecycle, session coordination, global shortcut, capsule and toast panels, updater
     Features/         Dashboard, insights, meetings, history, models, vocabulary, style, settings and capsule UI
     Design/           Small shared view components and the brand mark, which also renders the app icon
-  BetterWisprCore/
+  VaaniCore/
     Domain/           AppSettings, writing styles and app categories, usage insights, Transcript, VocabularyEntry and Meeting value types
     Persistence/      SavedState, per-meeting files and atomic local JSON storage
     Audio/            Microphone and system audio capture, temporary recordings and level metering
@@ -25,7 +25,7 @@ Sources/
     Transcription/    English filler/stutter cleanup, spoken email layout, optional notes-model polish, writing styles and vocabulary replacements
     Notes/            Meeting notes with Apple Intelligence, Ollama, signed-in CLIs and explicit API connections
     Integrations/     Clipboard and guarded paste delivery
-  BetterWisprCLI/      Developer entry point for model and file smoke tests
+  VaaniCLI/      Developer entry point for model and file smoke tests
 ```
 
 ## Dictation flow
@@ -151,7 +151,7 @@ tabs backed by the existing meeting fields.
    If condensation still exceeds the budget it reports an error instead of
    truncating the source. Provider failure never selects another engine; the
    transcript, thoughts and previous summary remain saved.
-5. Each meeting is one JSON file in `Application Support/BetterWispr/Meetings`.
+5. Each meeting is one JSON file in `Application Support/Vaani/Meetings`.
    Unreadable files are reported and left untouched. Chunk files are deleted after
    transcription, on cancel and at quit, and leftovers are removed at launch. The
    speaker detection file is deleted after detection, on cancel and at quit, and
@@ -171,7 +171,7 @@ local state and never records anything itself.
    from macOS 14.2. Older systems detect nothing.
 2. `MeetingPlatform.app(recording:)` maps the recording processes to known apps.
    Helper processes such as `com.google.Chrome.helper` map to their app, and
-   `com.apple.WebKit.GPU` maps to Safari. Unknown apps, BetterWispr included,
+   `com.apple.WebKit.GPU` maps to Safari. Unknown apps, Vaani included,
    are ignored.
 3. Native call apps (Zoom, Teams, Slack, Webex, FaceTime, Discord, WhatsApp,
    Signal and Telegram) count as a call while they record. A browser counts only
@@ -195,7 +195,7 @@ it explicitly enables sending transcript and thoughts. Keys are never inferred
 from a speech connection or moved to an edited destination.
 
 Claude Code uses `claude --print` and its existing Claude subscription sign-in;
-Codex uses `codex exec` with ChatGPT authentication required. BetterWispr does not
+Codex uses `codex exec` with ChatGPT authentication required. Vaani does not
 extract OAuth tokens. These CLI routes strip inherited provider/key environment
 variables, run in a private temporary directory, disable tools/customizations as
 supported by each CLI, and disable session persistence. Codex also uses read-only
@@ -250,7 +250,7 @@ deleted, and its expand button opens the meeting in the dashboard instead.
 
 `AudioInputs` lists Core Audio devices with an input stream, keyed by UID, and
 skips private aggregate devices (Core Audio's per-process default aggregate and
-BetterWispr's system audio tap). `AppSettings.microphone` is the saved choice;
+Vaani's system audio tap). `AppSettings.microphone` is the saved choice;
 nil means Automatic, which is the macOS default input, Bluetooth headsets
 included. A chosen microphone is used only while it is connected, otherwise
 Automatic is used; there is no other fallback. Recording from a Bluetooth
@@ -312,7 +312,7 @@ from the main actor because Bluetooth initialization can block.
 ## Add a model
 
 Add an entry to `SpeechModel.catalog` in
-[`SpeechProvider.swift`](../Sources/BetterWisprCore/Speech/SpeechProvider.swift).
+[`SpeechProvider.swift`](../Sources/VaaniCore/Speech/SpeechProvider.swift).
 Use a stable ID, a compatible Core ML model folder name, the correct tokenizer
 repository, an honest resource description and `.whisperKit` as its engine. Parakeet
 entries use `.parakeet` and a `modelName` that `ParakeetProvider.source(for:)` maps
@@ -433,8 +433,8 @@ asks on the second launch, and Settings can change automatic checks and
 automatic installs at any time. Update requests carry no audio, transcripts or
 vocabulary, and system profiling stays off. Dictation happens in other apps, so
 `AppUpdater` implements Sparkle's gentle reminders: a scheduled update found
-while BetterWispr is in the background shows an Update toast and an "Install
-BetterWispr" menu bar item instead of Sparkle's alert behind other windows. With
+while Vaani is in the background shows an Update toast and an "Install
+Vaani" menu bar item instead of Sparkle's alert behind other windows. With
 automatic installs on, a downloaded update shows a Restart toast and the same
 menu item, which installs and relaunches, because the app is rarely quit. Sparkle keeps these preferences in
 its own user defaults, not in `SavedState`. `scripts/release.sh` signs both

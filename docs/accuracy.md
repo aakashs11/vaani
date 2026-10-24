@@ -1,11 +1,16 @@
+# Historical BetterWispr evaluation notes
+
+The measurements and research below were inherited from BetterWispr. They are not Vaani benchmarks, nor evidence that Vaani improved recognition accuracy. Commands use the renamed Vaani CLI where applicable. Current recording privacy is described in `privacy.md`.
+
+---
+
 # Local transcription accuracy
 
 Research reviewed 2026-10-08. Measured below are read speech, accented
 video-call conversation, held-out Indian English, recorded meetings with speaker
 labels, meeting notes judged against their transcripts, and Light cleanup on 290
 dictations saved on the development Mac. Recognition accuracy on natural
-dictation is still not measured: BetterWispr keeps no dictation audio, so there
-is nothing to score a reference against.
+dictation was not measured in that upstream review. Vaani now supports opt-in audio retention, but no new accuracy benchmark is claimed here.
 The goal is to reduce real dictation errors on the user's hardware and languages;
 neither a model leaderboard nor a paper justifies claiming "best accuracy" for
 this application. A network-denied Tiny-model file smoke test and digital-silence
@@ -31,7 +36,7 @@ The consented dictation corpus under Reproducible evaluation remains a plan.
 | [arXiv:2503.06924](https://arxiv.org/abs/2503.06924) | Prompting Whisper large-v3 with filler words ("um, uh") caused inserted sentences, loops and invented text. Never put fillers in a Whisper prompt. |
 | [arXiv:2402.08021](https://arxiv.org/abs/2402.08021) | About 1% of Whisper transcripts contained hallucinated phrases, and longer non-vocal duration predicted them. Trimming long pauses before decoding is the evidenced mitigation. |
 | [Gu et al., arXiv:2405.15216](https://arxiv.org/abs/2405.15216); [Pu et al., arXiv:2310.11532](https://arxiv.org/abs/2310.11532) | Zero-shot LLM correction degraded strong recognizer output, and correcting every utterance raised WER. A general LLM rewrite is not an accuracy fix. |
-| [Orhon et al., WhisperKit, arXiv:2507.10860](https://arxiv.org/abs/2507.10860) | On-device inference optimization can combine useful latency with low WER in the authors' benchmark. Treat it as evidence that local execution is viable, not a measurement of BetterWispr or proof that every feature is in the public OSS SDK. |
+| [Orhon et al., WhisperKit, arXiv:2507.10860](https://arxiv.org/abs/2507.10860) | On-device inference optimization can combine useful latency with low WER in the authors' benchmark. Treat it as evidence that local execution is viable, not a measurement of Vaani or proof that every feature is in the public OSS SDK. |
 
 ## Models to compare
 
@@ -83,7 +88,7 @@ latency on a Mac or preserve accuracy after conversion/quantization.
    Parakeet uses vocabulary only when the optional phrase booster is installed.
    The booster is FluidAudio's CTC word spotter (arXiv:2406.07096): a separate
    110M CTC model (about 99 MB) scores each listed term against the audio, and a
-   decoded word is replaced only when a term fits the audio better. BetterWispr
+   decoded word is replaced only when a term fits the audio better. Vaani
    uses FluidAudio's stricter `itnDefaultConfig` similarity floors, because the
    default config replaced "We should render" with "Supabase" on a synthetic
    clip, and keeps the punctuation the decoder put around a replaced word. It
@@ -190,11 +195,11 @@ latency on a Mac or preserve accuracy after conversion/quantization.
 
 These are engineering recommendations inferred from the sources and failure
 modes above. They do not imply that VAD, model adaptation, streaming decoding or
-an LLM rewrite pipeline are already implemented in BetterWispr.
+an LLM rewrite pipeline are already implemented in Vaani.
 
 ## Parakeet TDT v3 baseline, 2026-10-09
 
-Measured on an Apple M5 with macOS 26.6.2, a release build of `BetterWisprCLI`
+Measured on an Apple M5 with macOS 26.6.2, a release build of `VaaniCLI`
 from commit 33f726a plus the uncommitted 0.1.4 changes, FluidAudio 0.17.5 and a
 warm model cache. The corpus is 355 read-speech clips fetched by
 `scripts/fetch_bench_corpus.py`: 40 evenly spaced clips from each test split of
@@ -259,7 +264,7 @@ and a native runtime.
 
 ## Accented conversational English, 2026-10-10
 
-Measured on the same Mac with a release build of `BetterWisprCLI` from commit
+Measured on the same Mac with a release build of `VaaniCLI` from commit
 cd8e2ca and Light cleanup. The corpus is 300 segments of
 [EdAcc](https://huggingface.co/datasets/edinburghcstr/edacc) fetched by
 `scripts/fetch_bench_corpus.py --accents`: 100 evenly spaced segments per accent
@@ -298,7 +303,7 @@ references, not dictation, and each accent has few speakers.
 
 ## Parakeet Ultra on conversational English, 2026-10-11
 
-Measured on an Apple M5 with macOS 27.0.1, a release build of `BetterWisprCLI`
+Measured on an Apple M5 with macOS 27.0.1, a release build of `VaaniCLI`
 from commit 089b2f5 plus the uncommitted 0.1.5 changes, FluidAudio 0.17.5 and
 Light cleanup, on the same 300 EdAcc segments as above, fetched again with
 `scripts/fetch_bench_corpus.py --accents`. v3 reproduced its earlier row exactly,
@@ -321,7 +326,7 @@ so the two runs share clips and scoring.
 
 ## Trailing silence and VAD before Parakeet, 2026-10-12
 
-Measured on an Apple M5 with macOS 27.0.1, release builds of `BetterWisprCLI`
+Measured on an Apple M5 with macOS 27.0.1, release builds of `VaaniCLI`
 from commit 18bbac4, FluidAudio 0.17.5, `--language en` and Light cleanup, on
 the same 300 EdAcc segments as above. VoiceInk appends one second of silence
 before transcribing, and the question was whether Parakeet gains from it. In
@@ -386,13 +391,13 @@ nothing. The unchanged path reproduced itself exactly on three runs.
 
 ## Phrase booster floor, 2026-10-10
 
-Measured on the same Mac with release builds of `BetterWisprCLI`, Parakeet v3,
+Measured on the same Mac with release builds of `VaaniCLI`, Parakeet v3,
 English and Light cleanup, using `--bench MANIFEST --model parakeet-v3
 --vocabulary "A,B,…"`. Three runs per setting:
 
 - **Absent.** The 300 EdAcc segments above with 20 product and name terms that
   none of them say (Granola, Vercel, Supabase, Kubernetes, Postgres, Figma,
-  Notion, Linear, Slack, Mem0, BetterWispr, Parakeet, Claude, Anthropic,
+  Notion, Linear, Slack, Mem0, Vaani, Parakeet, Claude, Anthropic,
   Tailwind, Ollama, Sparkle, Labhshetwar, Kartik, MDX). Any change is a false
   replacement.
 - **Present.** The same segments with 14 names they do say (Eragon, Paolini,
@@ -422,7 +427,7 @@ English and Light cleanup, using `--bench MANIFEST --model parakeet-v3
   The floor was chosen on these same three sets, so it may be tuned to them.
 - The rescorer sometimes widened a replacement to a neighbouring word, writing
   "Harry Potter" over "seven Harry Potter", "to Harry Potter" and "with Harry
-  Potter". When the decoded words already contain the term, BetterWispr now
+  Potter". When the decoded words already contain the term, Vaani now
   keeps them and does not count a vocabulary fix.
 - Remaining false replacements include "list one" to "Lisbon", "cinema" to
   "Cinna" and "Dragon" to "Eragon" in the present set, and "option" to
@@ -436,7 +441,7 @@ English and Light cleanup, using `--bench MANIFEST --model parakeet-v3
 
 ## Held-out Indian English, 2026-10-12
 
-Measured on an Apple M5 with macOS 27.0.1, release builds of `BetterWisprCLI`
+Measured on an Apple M5 with macOS 27.0.1, release builds of `VaaniCLI`
 with the 0.1.5 changes, FluidAudio 0.17.5, `--language en` and Light cleanup.
 The corpus is every Indian English segment in the EdAcc validation and test
 splits with at least four words that the 100 segments above did not use: 597
@@ -518,7 +523,7 @@ appeared anywhere in the reference, which scored "Christian countries" to
 
 ## Meetings and speakers, 2026-10-12
 
-Measured on an Apple M5 with macOS 27.0.1, release builds of `BetterWisprCLI`
+Measured on an Apple M5 with macOS 27.0.1, release builds of `VaaniCLI`
 with the 0.1.5 changes, FluidAudio 0.17.5, `--language en` and Light cleanup.
 `--meeting` plays a file through the app's meeting chunker as call audio,
 transcribes each chunk as a meeting does and labels voices with Speaker
@@ -553,7 +558,7 @@ speaker, the most attribution can reach with one label per segment.
 | Split at voice changes | 14.08% | 13.32% | 98.1% | 93.8% | 93.3% |
 
 - A chunk ends at a 0.6 s pause once it is at least 3 s long, or at 20 s, so
-  one chunk often held two speakers under one label. BetterWispr now cuts a chunk where
+  one chunk often held two speakers under one label. Vaani now cuts a chunk where
   Speaker detection hears the voice change and transcribes each piece again.
   Turns shorter than 1 s stay with their neighbour. Attribution rose on all six
   calls and on three of the four meetings, and WER rose by about 0.4 points
@@ -579,7 +584,7 @@ speaker, the most attribution can reach with one label per segment.
 
 ## Meeting notes, 2026-10-12
 
-Notes came from Apple Intelligence through `BetterWisprCLI --meeting
+Notes came from Apple Intelligence through `VaaniCLI --meeting
 SEGMENTS.jsonl --notes OUT.md`, on the Ultra segments of seven meetings, three
 runs each, with the builds before and after the notes changes. Three meetings
 (IS1009a, ES2004a, EN2002a) were used while making the changes and four
@@ -636,7 +641,7 @@ UTF-8 JSON object per line:
 {"id":"silence-001","reference":"","hypothesis":""}
 ```
 
-`BetterWisprCLI --bench` writes these lines for a manifest of clips, and
+`VaaniCLI --bench` writes these lines for a manifest of clips, and
 `scripts/fetch_bench_corpus.py` builds the read-speech manifest used above, with
 `--accents` the EdAcc manifest, or with `--meetings` the AMI meetings and EdAcc
 calls, each a WAV file and a JSON file of speaker turns.
@@ -645,11 +650,11 @@ calls, each a WAV file and a JSON file of speaker turns.
 python3 -I scripts/fetch_bench_corpus.py /tmp/bench 40
 python3 -I scripts/fetch_bench_corpus.py /tmp/accents 100 --accents
 python3 -I scripts/fetch_bench_corpus.py /tmp/meetings --meetings
-swift build -c release --product BetterWisprCLI
-.build/release/BetterWisprCLI --bench /tmp/bench/manifest.jsonl --model parakeet-v3 > results.jsonl
-.build/release/BetterWisprCLI --meeting /tmp/meetings/ami-ES2004a.wav --model parakeet-ultra --language en > ES2004a.jsonl
+swift build -c release --product VaaniCLI
+.build/release/VaaniCLI --bench /tmp/bench/manifest.jsonl --model parakeet-v3 > results.jsonl
+.build/release/VaaniCLI --meeting /tmp/meetings/ami-ES2004a.wav --model parakeet-ultra --language en > ES2004a.jsonl
 python3 scripts/evaluate_meetings.py /tmp/meetings/ami-ES2004a.json ES2004a.jsonl
-.build/release/BetterWisprCLI --meeting ES2004a.jsonl --notes ES2004a.md
+.build/release/VaaniCLI --meeting ES2004a.jsonl --notes ES2004a.md
 python3 scripts/evaluate_transcripts.py results.jsonl --group language
 python3 scripts/evaluate_transcripts.py /path/to/pairs.jsonl
 python3 scripts/evaluate_transcripts.py /path/to/pairs.jsonl --raw

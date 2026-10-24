@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
+# Vaani modification, 2026: product identity and compatibility; see docs/provenance.md.
 """Link focused checks against the actual debug package objects, without Swift Testing."""
 from pathlib import Path
 import shlex, subprocess, sys
 root = Path(__file__).resolve().parent.parent
 build = root / '.build/arm64-apple-macosx/debug'
-objects = shlex.split((build / 'BetterWispr.product/Objects.LinkFileList').read_text())
-objects = [p for p in objects if '/BetterWispr.build/' not in p]
+objects = shlex.split((build / 'Vaani.product/Objects.LinkFileList').read_text())
+objects = [p for p in objects if '/Vaani.build/' not in p]
 output = build / 'microphone-startup-check'
 command = ['swiftc', '-swift-version', '6', '-enable-bare-slash-regex', '-parse-as-library',
            '-module-cache-path', str(root / '.build/microphone-module-cache'),

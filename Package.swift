@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "BetterWispr",
+    name: "Vaani",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "BetterWispr", targets: ["BetterWispr"]),
-        .executable(name: "BetterWisprCLI", targets: ["BetterWisprCLI"]),
-        .library(name: "BetterWisprCore", targets: ["BetterWisprCore"])
+        .executable(name: "Vaani", targets: ["Vaani"]),
+        .executable(name: "VaaniCLI", targets: ["VaaniCLI"]),
+        .library(name: "VaaniCore", targets: ["VaaniCore"])
     ],
     dependencies: [
         .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.0"),
@@ -15,17 +15,17 @@ let package = Package(
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")
     ],
     targets: [
-        .target(name: "BetterWisprCore", dependencies: [
+        .target(name: "VaaniCore", dependencies: [
             .product(name: "WhisperKit", package: "argmax-oss-swift"),
             .product(name: "FluidAudio", package: "FluidAudio")
         ]),
         .executableTarget(
-            name: "BetterWispr",
-            dependencies: ["BetterWisprCore", .product(name: "Sparkle", package: "Sparkle")],
+            name: "Vaani",
+            dependencies: ["VaaniCore", .product(name: "Sparkle", package: "Sparkle")],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
-        .executableTarget(name: "BetterWisprCLI", dependencies: ["BetterWisprCore"]),
-        .testTarget(name: "BetterWisprCoreTests", dependencies: ["BetterWisprCore", "BetterWispr"])
+        .executableTarget(name: "VaaniCLI", dependencies: ["VaaniCore"]),
+        .testTarget(name: "VaaniCoreTests", dependencies: ["VaaniCore", "Vaani"])
     ],
     swiftLanguageModes: [.v6]
 )

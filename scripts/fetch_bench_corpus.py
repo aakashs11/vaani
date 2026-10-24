@@ -1,3 +1,4 @@
+# Vaani modification, 2026: product identity and compatibility; see docs/provenance.md.
 """Fetch a small multilingual read-speech, with --accents accented conversational English, or with --meetings AMI and EdAcc call recordings, test corpus from HF datasets-server."""
 import array, json, operator, re, subprocess, time, urllib.error, sys, urllib.request, urllib.parse, wave
 from pathlib import Path
