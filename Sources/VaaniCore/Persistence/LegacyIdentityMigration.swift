@@ -14,6 +14,10 @@ public enum LegacyIdentityMigration {
         let fm = FileManager.default
         guard source.standardizedFileURL != destination.standardizedFileURL else { throw Failure.conflict }
         guard fm.fileExists(atPath: source.path) else { return false }
+        guard try source.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { throw Failure.invalid }
+        if fm.fileExists(atPath: destination.path) {
+            guard try destination.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { throw Failure.conflict }
+        }
         let manifest = try snapshot(source)
         if fm.fileExists(atPath: destination.path) {
             guard let data = try? Data(contentsOf: destination.appendingPathComponent(receiptName)),

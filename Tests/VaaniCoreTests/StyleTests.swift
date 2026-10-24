@@ -32,10 +32,11 @@ import Testing
     #expect(StyleFormatter.apply(.casual, to: "Hi team,\n\nI shipped it.") == "Hi team, I shipped it")
 }
 
+// Preserve inherited sound-alike brand fixtures independently of product naming.
 @Test func vocabularyCountsOnlyChangedSpellings() {
-    let entries = [VocabularyEntry(phrase: "cardic", replacement: "Kartik"), VocabularyEntry(phrase: "Vaani", replacement: "")]
-    let result = VocabularyProcessor.corrected(entries, in: "cardic uses betterwispr and Vaani")
-    #expect(result.text == "Kartik uses Vaani and Vaani")
+    let entries = [VocabularyEntry(phrase: "cardic", replacement: "Kartik"), VocabularyEntry(phrase: "BetterWispr", replacement: "")]
+    let result = VocabularyProcessor.corrected(entries, in: "cardic uses betterwispr and BetterWispr")
+    #expect(result.text == "Kartik uses BetterWispr and BetterWispr")
     #expect(result.fixes == 2)
 }
 

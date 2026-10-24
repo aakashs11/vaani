@@ -428,13 +428,14 @@ func everyListedParakeetV3LanguageReachesTheDecoderAsAHint(_ id: String) throws 
     #expect(!ParakeetProvider.alreadySaysTerm((original: "Next JS", replacement: "NextJS")))
 }
 
+// Preserve inherited sound-alike brand fixtures independently of product naming.
 @Test func boostedTermsReplaceMisheardSpellingsButNotOtherRealWords() {
     #expect(ParakeetProvider.keepsOriginal((original: "option", replacement: "Notion"), spelledCorrectly: true))
     #expect(ParakeetProvider.keepsOriginal((original: "dinner", replacement: "Disney"), spelledCorrectly: true))
     #expect(ParakeetProvider.keepsOriginal((original: "grand slam", replacement: "Granola"), spelledCorrectly: true))
     #expect(!ParakeetProvider.keepsOriginal((original: "Versal", replacement: "Vercel"), spelledCorrectly: false))
     #expect(!ParakeetProvider.keepsOriginal((original: "Karthik.", replacement: "Kartik"), spelledCorrectly: true))
-    #expect(!ParakeetProvider.keepsOriginal((original: "Better Whisper", replacement: "Vaani"), spelledCorrectly: true))
+    #expect(!ParakeetProvider.keepsOriginal((original: "Better Whisper", replacement: "BetterWispr"), spelledCorrectly: true))
     #expect(ParakeetProvider.restoringPunctuation(
         original: "Pick an option, then tell Versal.",
         rescored: "Pick an Notion then tell Vercel",

@@ -41,10 +41,11 @@ run: build ## Build and launch (debug)
 
 test: ## Unit tests, evaluator and release script checks
 	@swift build -Xswiftc -DDISABLE_APPLE_INTELLIGENCE 2>&1 | tail -1
-	@swift test -Xswiftc -DDISABLE_APPLE_INTELLIGENCE 2>&1 | tail -1
+	@bash scripts/test-swift.sh
 	@python3 Tests/evaluate_check.py
 	@python3 Tests/release_check.py
 	@python3 scripts/check-identity-migration.py
+	@python3 Tests/cli_startup_check.py
 	@bash scripts/check-dictation-evidence.sh
 	@python3 scripts/check-microphone-startup.py
 

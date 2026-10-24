@@ -47,6 +47,10 @@ func run() async throws {
         }
         return
     }
+    // CLI model operations must not create a destination that blocks first GUI migration.
+    let applicationSupport = URL.applicationSupportDirectory
+    _ = try LegacyIdentityMigration.migrate(from: applicationSupport.appendingPathComponent("BetterWispr"),
+                                           to: applicationSupport.appendingPathComponent("Vaani"))
     if arguments == ["--download-phrase-booster"] {
         try await ParakeetProvider.installPhraseBooster()
         print("Installed the Parakeet phrase booster at \(ParakeetProvider.phraseBoosterDirectory.path).")

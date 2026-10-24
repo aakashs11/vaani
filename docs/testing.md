@@ -6,13 +6,14 @@ Automated checks and physical Mac checks establish different things. A successfu
 
 Run `make test` with a complete compatible Xcode toolchain. It runs Swift build/tests, transcript/meeting evaluator checks, release preflight checks, migration fixtures, saved-evidence/vocabulary checks, and capture checks. The package requires Swift 6.2+. Optional Apple Intelligence notes are disabled in the current build configuration.
 
-The installed Command Line Tools can compile the app but lack a discoverable complete Swift Testing setup. On that toolchain, do not report `swift test` as passing. CI uses the complete Xcode toolchain on the `macos-26` Apple Silicon runner.
+The installed Command Line Tools do not discover Swift Testing automatically and omit its Foundation overlay module. `scripts/test-swift.sh` locates the bundled core Testing framework and disables automatic overlay imports on CLT. It runs the same tests. Full Xcode uses its normal configuration. CI is configured for the complete Xcode toolchain on the `macos-26` Apple Silicon runner.
 
 Focused checks against production code are available independently:
 
 ```sh
 swift build -Xswiftc -DDISABLE_APPLE_INTELLIGENCE
 python3 scripts/check-identity-migration.py
+python3 Tests/cli_startup_check.py
 bash scripts/check-dictation-evidence.sh
 python3 scripts/check-microphone-startup.py
 python3 Tests/evaluate_check.py
@@ -21,7 +22,7 @@ python3 Tests/release_check.py
 
 `python3 scripts/check-credential-migration.py` additionally exercises a disposable Keychain account with a random UUID and synthetic secret. It does not read existing credentials. It checks lazy copying, preservation of the original entry during migration, and explicit removal without resurrection. Run it only on a Mac where Keychain is available.
 
-Migration fixtures cover source preservation, exact settings/history, cached bytes, saved audio/pins/references, repeat launch, later Vaani edits, diverged legacy data, unrelated destination, corrupt/unsupported workspace, missing audio, and write failure. Evidence tests cover retention, pinning, corruption, interrupted saves, deletion, cancellation, and vocabulary safety. Capture checks cover stopped preparation, subscriber lifecycle, cancellation, and first-buffer delivery at 16/48 kHz.
+Migration fixtures cover source preservation, exact settings/history, cached bytes, saved audio/pins/references, repeat launch, later Vaani edits, diverged legacy data, unrelated destination, corrupt/unsupported workspace, missing audio, write failure, and symbolic-link roots. The CLI startup check uses a temporary home and verifies migration precedes provider storage. Evidence tests cover retention, pinning, corruption, interrupted saves, deletion, cancellation, and vocabulary safety. Capture checks cover stopped preparation, subscriber lifecycle, cancellation, and first-buffer delivery at 16/48 kHz.
 
 ## Candidate bundle
 

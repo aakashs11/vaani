@@ -12,7 +12,7 @@ The [origin and changes table](docs/provenance.md) explains inherited features a
 
 ## Build and run
 
-Requires a compatible macOS development toolchain with Swift 6.2 or later. The package targets macOS 14+, with Apple Silicon as the initial release target. Actual model availability depends on hardware and language. Full Swift tests need a toolchain that includes Swift Testing and its Foundation support.
+Requires a compatible macOS development toolchain with Swift 6.2 or later. The package targets macOS 14+, with Apple Silicon as the initial release target. Actual model availability depends on hardware and language. Full Swift tests use the toolchain’s Swift Testing framework. `make test` includes a compatibility wrapper for the installed Command Line Tools.
 
 ```sh
 git clone https://github.com/aakashs11/vaani.git

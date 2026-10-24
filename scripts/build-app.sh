@@ -10,7 +10,10 @@ if [[ $# -gt 2 || ( "$configuration" != debug && "$configuration" != release ) |
 fi
 swift build -c "$configuration" --arch "$architecture" --product Vaani -Xswiftc -DDISABLE_APPLE_INTELLIGENCE
 binary_dir="$(swift build -c "$configuration" --arch "$architecture" --show-bin-path)"
-app="$binary_dir/Vaani.app"
+destination="$binary_dir/Vaani.app"
+work="$(mktemp -d "$binary_dir/.Vaani-build.XXXXXX")"
+trap 'rm -rf "$work"' EXIT
+app="$work/Vaani.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 # SwiftPM checkout licenses/resources can be read-only after the first copy.
 chmod -R u+w "$app"
@@ -41,6 +44,7 @@ cp LICENSES/Adapted-Code-Notices.txt "$app/Contents/Resources/Licenses/Adapted-C
 cp .build/checkouts/argmax-oss-swift/LICENSE "$app/Contents/Resources/Licenses/Argmax-MIT.txt"
 cp .build/checkouts/argmax-oss-swift/NOTICES "$app/Contents/Resources/Licenses/Argmax-NOTICES.txt"
 cp .build/checkouts/FluidAudio/LICENSE "$app/Contents/Resources/Licenses/FluidAudio-Apache-2.0.txt"
+ditto .build/checkouts/FluidAudio/ThirdPartyLicenses "$app/Contents/Resources/Licenses/FluidAudio-ThirdPartyLicenses"
 cp .build/checkouts/swift-argument-parser/LICENSE.txt "$app/Contents/Resources/Licenses/Swift-Argument-Parser-Apache-2.0.txt"
 cp .build/checkouts/Sparkle/LICENSE "$app/Contents/Resources/Licenses/Sparkle-MIT.txt"
 # SwiftPM resources from speech/tokenizer dependencies must travel with the app.
@@ -56,4 +60,11 @@ if [[ "$identity" == - ]]; then
     echo 'Development build: ad-hoc signed. macOS permissions may need renewal after rebuilding.' >&2
 fi
 codesign --force --deep --sign "$identity" --entitlements Resources/Vaani.entitlements "$app"
-echo "$app"
+# Replace only a complete verified bundle, so stale executables cannot survive rebuilds.
+codesign --verify --deep --strict "$app"
+if [[ -e "$destination" ]]; then mv "$destination" "$work/previous.app"; fi
+if ! mv "$app" "$destination"; then
+    [[ ! -e "$work/previous.app" ]] || mv "$work/previous.app" "$destination"
+    exit 1
+fi
+echo "$destination"

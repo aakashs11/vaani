@@ -8,6 +8,7 @@ Vaani is an independently maintained derivative of BetterWispr, originally creat
 | VoiceInk, revision `c09cc1f677f40f2ee665843a61f07670210f012e` | GPL-3.0. Adapted preview, correction, warm-up, editing/context, and writing-mode logic. See inherited reuse ledger for exact files and changes. |
 | Argmax OSS / WhisperKit 1.1.0 | MIT, copyright 2024 argmax, inc. Inference dependency and adapted local tokenizer. Dependency license and notices ship in the app. |
 | FluidAudio 0.17.5 | Apache-2.0. Parakeet inference and speaker detection, including adapted parameter parsing. |
+| FluidAudio bundled third-party code | Its `ThirdPartyLicenses` directory ships intact, including NemoTextProcessing/Rust FST dependencies, fastcluster, VBx, and text frontend notices. |
 | Sparkle 2.10.0 | MIT. Retained dependency scaffolding, with upstream automatic updates disabled and no upstream feed/key configured. |
 | Swift Argument Parser 1.8.2 | Apache-2.0. Transitive dependency. |
 | BetterShot | BSD-3-Clause, copyright 2026 Kartik Labhshetwar. Adapted toast surface and original release-workflow reference. |

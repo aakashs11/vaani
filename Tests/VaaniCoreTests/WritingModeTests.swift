@@ -143,7 +143,7 @@ import Testing
 
     var withModes = settings
     withModes.modes = [WritingMode(name: "Code", isEnabled: false, apps: ["com.microsoft.VSCode"], websites: ["github.com"], triggerWords: ["code"],
-                                   cleanup: .none, tone: .casual, useScreenContext: true, instructions: "Keep identifiers as spoken.")]
+                                   cleanup: CleanupLevel.none, tone: .casual, useScreenContext: true, instructions: "Keep identifiers as spoken.")]
     #expect(try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(withModes)) == withModes)
 }
 

@@ -7,6 +7,7 @@ info=plistlib.loads((app/'Contents/Info.plist').read_bytes())
 assert info['CFBundleIdentifier']=='io.github.aakashs11.vaani'
 assert info['CFBundleName']=='Vaani' and info['CFBundleExecutable']=='Vaani'
 assert (app/'Contents/MacOS/Vaani').is_file()
+assert not (app/'Contents/MacOS/BetterWispr').exists(), 'Stale upstream executable in generated bundle'
 assert (app/'Contents/Resources/AppIcon.icns').stat().st_size>0
 assert 'SUFeedURL' not in info and 'SUPublicEDKey' not in info
 for key,value in info.items():

@@ -5,6 +5,15 @@ func check(_ condition: Bool) { precondition(condition) }
 
 @main struct IdentityMigrationCheck {
     static func main() async throws {
+        if CommandLine.arguments.dropFirst().first == "--application-support" {
+            print(URL.applicationSupportDirectory.path)
+            return
+        }
+        if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--migrate" {
+            _ = try LegacyIdentityMigration.migrate(from: URL(fileURLWithPath: CommandLine.arguments[2]), to: URL(fileURLWithPath: CommandLine.arguments[3]))
+            print("Validated migration completed. Original source retained.")
+            return
+        }
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("vaani-migration-test-\(UUID())")
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
@@ -44,6 +53,12 @@ func check(_ condition: Bool) { precondition(condition) }
         try LocalStore(directory: target).save(state)
         check(try LegacyIdentityMigration.migrate(from: source, to: target) == false)
         check(try LocalStore(directory: target).load() == state)
+        let alias = root.appendingPathComponent("linked-source")
+        let linkedTarget = root.appendingPathComponent("linked-result")
+        try fm.createSymbolicLink(at: alias, withDestinationURL: source)
+        do { _ = try LegacyIdentityMigration.migrate(from: alias, to: linkedTarget); fatalError("Symlink source was copied as a shared workspace") } catch {}
+        check(!fm.fileExists(atPath: linkedTarget.path))
+        check(!fm.fileExists(atPath: source.appendingPathComponent(".vaani-migration.json").path))
         try Data("changed by old app".utf8).write(to: source.appendingPathComponent("workspace.json"))
         do { _ = try LegacyIdentityMigration.migrate(from: source, to: target); fatalError("Changed legacy source was accepted") } catch {}
         check(try LocalStore(directory: target).load() == state)
