@@ -218,6 +218,16 @@ func standaloneModifiersRoundTripThroughSettings(keyCode: UInt32) throws {
     #expect(TranscriptCleaner.clean("we tried again and again and again", language: "en") == "we tried again and again and again")
 }
 
+@Test func cleanerPreservesRepeatedUtterancesAtClauseBoundaries() {
+    #expect(TranscriptCleaner.clean("Update the app update the app.", language: "en")
+            == "Update the app update the app.")
+    #expect(TranscriptCleaner.clean("Update the app update the app update the app", language: "en")
+            == "Update the app update the app update the app")
+    #expect(TranscriptCleaner.clean("Please go back go back, then open Settings.", language: "en")
+            == "Please go back go back, then open Settings.")
+    #expect(TranscriptCleaner.clean("Stop stop stop!", language: "en") == "Stop stop stop!")
+}
+
 @Test func cleanerLeavesOtherLanguagesAndEmptiesFillerOnlyText() {
     #expect(TranscriptCleaner.clean(" Wir treffen uns um acht Uhr ", language: "de") == "Wir treffen uns um acht Uhr")
     #expect(TranscriptCleaner.clean("uh, um... hmm", language: "en") == "")

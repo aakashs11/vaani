@@ -2,6 +2,7 @@
 # Vaani addition, 2026: run the same suite with full Xcode or the CLT Testing framework.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+bash scripts/prepare-dependencies.sh
 arguments=(-Xswiftc -DDISABLE_APPLE_INTELLIGENCE)
 developer="$(xcode-select -p)"
 frameworks="$developer/Library/Developer/Frameworks"

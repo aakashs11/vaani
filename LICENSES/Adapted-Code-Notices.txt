@@ -130,3 +130,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 /// WhisperKit's built-in loader falls back to the network even with download:false.
 /// This adapter accepts only a tokenizer already loaded from a local folder.
+
+=== FluidAudio single-window repetition patch ===
+FluidInference/FluidAudio, Apache License 2.0.
+Source revision: 0b1f46289fe27d95b5e66ad8be46e64f5ee02ae7 (0.17.5).
+Vaani modification, November 2026: skip seam-only duplicate-word collapse for
+a single Unified recognition window. Patch context retains upstream code.
+The complete upstream Apache-2.0 license ships as FluidAudio-Apache-2.0.txt
+in the app bundle. See docs/oss-reuse.md and patches/README.md.

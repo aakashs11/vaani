@@ -4,6 +4,13 @@ import Foundation
 
 @main struct MicrophoneStartupCheck {
     @MainActor static func main() async throws {
+        if CommandLine.arguments.contains("--input-format") {
+            let (device, _, format) = try AudioInputs.captureDevice(nil)
+            precondition(format.sampleRate > 0 && format.channelCount > 0)
+            precondition(format.commonFormat == .pcmFormatFloat32 && format.isInterleaved)
+            print("PASS: capture format for \(device.name): \(format)")
+            return
+        }
         if CommandLine.arguments.contains("--activity") {
             print("Microphone recording processes: \(MicrophoneActivity.recordingBundleIDs())")
             return
@@ -11,6 +18,26 @@ import Foundation
         let recorder = AudioRecorder()
         recorder.invalidateMicrophonePreparation()
         precondition(!recorder.hasPreparedMicrophone)
+        for channels: AVAudioChannelCount in [1, 2, 3, 4, 8] {
+            let format = AudioInputs.captureFormat(sampleRate: 48_000, channels: channels)!
+            precondition(format.channelCount == channels && format.sampleRate == 48_000)
+            precondition(format.commonFormat == .pcmFormatFloat32 && format.isInterleaved)
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 960)!
+            buffer.frameLength = 960
+            for index in 0..<(960 * Int(channels)) { buffer.floatChannelData![0][index] = 0.25 }
+            let file = FileManager.default.temporaryDirectory.appending(path: "input-format-\(UUID()).caf")
+            defer { try? FileManager.default.removeItem(at: file) }
+            let writer = try RecordingWriter(url: file, format: format, threshold: 0)
+            precondition(!writer.write(buffer).isEmpty)
+            let result = writer.finish()
+            precondition(result.error == nil && abs(result.duration - 0.02) < 0.000001)
+            let audio = try AVAudioFile(forReading: file)
+            precondition(audio.length == 960 && audio.processingFormat.channelCount == channels)
+        }
+        for (rate, channels): (Double, AVAudioChannelCount) in [(0, 1), (.nan, 1), (.infinity, 1), (48_000, 0)] {
+            precondition(AudioInputs.captureFormat(sampleRate: rate, channels: channels) == nil)
+        }
+        print("PASS: mono, stereo and multichannel microphone capture formats and recording files")
         for rate in [16_000.0, 48_000.0] {
             let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
             let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 960)!
@@ -37,6 +64,8 @@ import Foundation
         let source = MicrophoneInput.Source(hardware: fake)
         try await source.prepare()
         precondition(fake.starts == 0 && !fake.isRunning, "idle preparation must never start capture")
+        precondition(source.canReuse(deviceID: fake.deviceID, format: fake.format), "unchanged stopped preparation must remain reusable")
+        precondition(!source.canReuse(deviceID: fake.deviceID + 1, format: fake.format), "a new default device must not reuse old preparation before its observer settles")
         let changedFormat = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)!
         precondition(!source.canReuse(deviceID: fake.deviceID, format: changedFormat), "stale stopped preparation must be discarded")
         let first = UUID(), meeting = UUID()
@@ -48,6 +77,7 @@ import Foundation
         precondition(fake.isRunning, "dictation must not stop an active meeting")
         source.remove(meeting)
         precondition(!fake.isRunning && fake.stops == 1)
+        precondition(!source.canReuse(deviceID: fake.deviceID, format: fake.format), "disposed capture must not be reused")
         for duringStart in [false, true] {
             let delayed = FakeMicrophoneHardware(prepareDelay: duringStart ? 0 : 100, startDelay: duringStart ? 100 : 0)
             let delayedSource = MicrophoneInput.Source(hardware: delayed)

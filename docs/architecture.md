@@ -389,16 +389,22 @@ tokenizers. Its tokenizer adapter exists because the upstream public loader can
 fall back to the network; see [source attribution](oss-reuse.md).
 
 Parakeet's phrase booster is FluidAudio's CTC word-spotting model. It downloads
-with each explicit Parakeet install, in parallel with the model, or from the
+with each explicit legacy Parakeet install, in parallel with the model, or from the
 Vocabulary page or `--download-phrase-booster`. A failed booster download leaves
 the model installed. It goes into
 FluidAudio's shared cache (`CtcModels.defaultCacheDirectory(for: .ctc110m)`),
 because FluidAudio reads the booster's tokenizer from that fixed folder. A
-`.betterwispr-installed` marker is written after the files load. `prepare`
-loads an installed booster with `CtcModels.loadDirect` and never downloads it;
-a missing or broken booster leaves plain Parakeet transcription unchanged.
+`.betterwispr-installed` marker is written after the files load. The first
+eligible transcription loads an installed booster with `CtcModels.loadDirect`
+and never downloads it. A missing or broken booster leaves plain Parakeet
+transcription unchanged.
 `transcribe` boosts only English or automatic-language dictation with a
 non-empty vocabulary and keeps the decoder's text when rescoring changes nothing.
+The booster and its vocabulary session stay cached for reuse with the selected
+recognizer and are released when switching models. Unified currently does not
+use recognition hints, because upstream boosting requires the separate CTC
+model and another inference pass. Post-recognition vocabulary replacements
+remain available.
 
 ## Add an integration
 

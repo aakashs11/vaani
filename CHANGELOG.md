@@ -1,5 +1,19 @@
 # Vaani changes
 
+## Unreleased — Dictation pipeline checkpoint (2026-11-04)
+
+- Add optional local speaker-playback reference capture and LocalVQE cleanup on macOS 14.2+, without changing playback volume or uploading the reference.
+- Integrate Parakeet Unified through its dedicated recognizer and reject unsupported language selections.
+- Preserve intentional repetitions in text cleanup and patch FluidAudio's single-window Unified seam deduplication, with exact dependency/source checks.
+- Load vocabulary CTC assets only when eligible hints need them and release them when changing recognizers.
+- Refresh the selected microphone format before reusing prepared capture and distinguish capture, recognition, and cleanup failures.
+- Bound migration hashing memory by releasing each temporary read buffer promptly, preserving source validation and recovery behavior.
+- Use GPU-assisted speaker cleanup with CPU fallback if model loading fails. Warmed-up fixture processing improved, but first-use latency and competing speech remain unresolved.
+- Add local accuracy/latency regression gates, aggregate benchmark results, and English/Hindi model research. Keep the existing model selection unchanged.
+
+This is a development checkpoint, not a new notarized binary release. See
+[measured results and known limitations](docs/dictation-update-20261104.md).
+
 ## Unreleased — Vaani identity transition
 
 - Rename native products, bundle metadata, permissions, packaging, and support destinations to Vaani.

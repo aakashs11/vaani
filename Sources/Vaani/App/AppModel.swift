@@ -30,6 +30,14 @@ struct DictationFailure: Equatable {
         DictationFailure(title: "Keep holding \(shortcut.displayName).", message: "Wait for the bars to move, then speak and release.")
     }
     static let noSpeech = DictationFailure(title: "No speech heard.", message: "Move closer to your microphone and try again.")
+    static func emptyTranscript(raw: String) -> DictationFailure {
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return DictationFailure(title: "Couldn’t recognize speech.",
+                                    message: "Audio was recorded, but no words were recognized. Try again or choose another local model.")
+        }
+        return DictationFailure(title: "No text remained after cleanup.",
+                                message: "Speech was recognized, but cleanup removed the text. Try again with Text cleanup set to None.")
+    }
     static let pasteBlocked = DictationFailure(title: "Copied, not pasted.", message: "Allow Accessibility so text lands at your cursor. Press ⌘V for now.", needsAccessibility: true)
 }
 
@@ -77,6 +85,7 @@ final class AppModel {
     static let onboardingVersion = 1
     static let phraseBoosterID = "phrase-booster"
     static let speakerDetectionID = "speaker-detection"
+    static let speakerCleanupID = "speaker-cleanup"
     static let unpastedCardSeconds = 5.0
     static let cancellationSeconds = 5.0
 
@@ -114,6 +123,8 @@ final class AppModel {
     var installation: ModelInstallation?
     var phraseBoosterInstalled = false
     var speakerDetectionInstalled = false
+    var speakerCleanupInstalled = false
+    var speakerCleanupIssue: String?
     var microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     var accessibilityGranted = AXIsProcessTrusted()
     var microphones: [AudioInputDevice] = []
@@ -128,6 +139,7 @@ final class AppModel {
     @ObservationIgnored private var sessionTimings: [String: Double] = [:]
     @ObservationIgnored private let store: LocalStore
     @ObservationIgnored private let recorder = AudioRecorder()
+    @ObservationIgnored private let speakerCleaner = SpeakerAudioCleaner()
     @ObservationIgnored private let startsServices: Bool
     @ObservationIgnored private let correctionWatcher = CorrectionWatcher()
     @ObservationIgnored private let globalShortcut = GlobalShortcut()
@@ -305,7 +317,9 @@ final class AppModel {
         liveTranscript = LiveTranscript()
         recordingDuration = 0
         let model = selectedModel
-        let live = model.engine == .parakeet && settings.showLiveText ? LiveTranscriber() : nil
+        let usesSpeakerCleanup = settings.reduceSpeakerAudio && speakerCleanupInstalled
+        // Previewing unprocessed playback would disagree with the final, echo-cancelled recording.
+        let live = model.engine == .parakeet && settings.showLiveText && !usesSpeakerCleanup ? LiveTranscriber() : nil
         live?.onUpdate = { [weak self] transcript in
             guard let self, self.generation == token else { return }
             self.liveTranscript = transcript
@@ -327,8 +341,14 @@ final class AppModel {
                 guard self.generation == token else { return }
                 self.recorder.silenceThreshold = self.settings.silenceThreshold
                 self.recorder.microphone = self.settings.microphone
+                self.recorder.reduceSpeakerAudio = usesSpeakerCleanup
+                self.speakerCleanupIssue = nil
                 self.statusMessage = "Starting microphone…"
                 try await self.recorder.start(onSamples: onSamples, since: captureRequestedAt)
+                if let issue = self.recorder.speakerAudioIssue {
+                    self.speakerCleanupIssue = "Speaker cleanup is unavailable. \(issue)"
+                    self.trace("speakerCleanup.captureUnavailable")
+                }
                 self.trace("capture.ready")
                 let url = await website?.value
                 try Task.checkCancellation()
@@ -411,6 +431,7 @@ final class AppModel {
                 }
                 self.recordingDuration = audio.duration
                 guard audio.hasSpeech else {
+                    self.trace("capture.belowThreshold")
                     try? FileManager.default.removeItem(at: audio.url)
                     self.fail(.noSpeech)
                     return
@@ -443,19 +464,52 @@ final class AppModel {
                 if self?.generation == token { self?.activeRecording = nil }
             }
             guard let self else { return }
+            var enhancedURL: URL?
+            defer { if let enhancedURL { try? FileManager.default.removeItem(at: enhancedURL) } }
             do {
                 try Task.checkCancellation()
                 try await self.prepare(model, language: recording.settings.language)
                 try Task.checkCancellation()
                 guard self.generation == token, let provider = self.provider else { return }
+                if recording.settings.reduceSpeakerAudio, audio.speakerReference != nil {
+                    self.statusMessage = "Removing speaker audio…"
+                    let started = ContinuousClock.now
+                    do {
+                        enhancedURL = try await self.speakerCleaner.process(audio)
+                        let computeUnits = await self.speakerCleaner.computeUnitsDescription
+                        try Task.checkCancellation()
+                        guard self.generation == token else { return }
+                        self.trace("speakerCleanup.finished", [
+                            "computeUnits": enhancedURL == nil ? "bypassed" : computeUnits,
+                            "applied": String(enhancedURL != nil),
+                            "elapsed": String(describing: started.duration(to: .now))
+                        ])
+                    } catch {
+                        try Task.checkCancellation()
+                        guard self.generation == token else { return }
+                        self.speakerCleanupIssue = "Speaker cleanup is unavailable. \(error.localizedDescription)"
+                        self.trace("speakerCleanup.processingUnavailable")
+                    }
+                    try Task.checkCancellation()
+                    guard self.generation == token else { return }
+                    self.statusMessage = model.engine == .api ? "Transcribing with \(model.name)…" : "Transcribing on your Mac…"
+                }
                 self.trace("recognition.started")
                 let recognitionStarted = ContinuousClock.now
-                let raw = try await provider.transcribe(audioURL: audio.url, language: language, vocabulary: VocabularyProcessor.hints(entries))
+                let raw = try await provider.transcribe(audioURL: enhancedURL ?? audio.url, language: language, vocabulary: VocabularyProcessor.hints(entries))
                 self.trace("recognition.finished", ["elapsed": String(describing: recognitionStarted.duration(to: .now)),
                                                      "characters": String(raw.count), "hasUnknownToken": String(raw.contains("<unk>"))])
                 Logger(subsystem: "io.github.aakashs11.vaani", category: "DictationTiming").notice("Recognition completed: elapsed=\(String(describing: recognitionStarted.duration(to: .now)), privacy: .public) empty=\(raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)")
                 try Task.checkCancellation()
                 guard self.generation == token else { return }
+                guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    let failure = DictationFailure.emptyTranscript(raw: raw)
+                    self.trace("recognition.empty")
+                    self.fail(failure)
+                    await self.archiveEvidence(recording, id: token, raw: raw,
+                                               recognition: provider.recognitionDetails, failure: failure.message)
+                    return
+                }
                 let lightlyCleaned = TranscriptCleaner.clean(raw, language: language)
                 let trigger = recording.settings.modes.match(transcript: lightlyCleaned)
                 let mode = trigger?.mode ?? recording.mode
@@ -484,8 +538,10 @@ final class AppModel {
                 }
                 let (text, fixes) = VocabularyProcessor.corrected(entries, in: spoken)
                 guard !text.isEmpty else {
-                    self.fail(.noSpeech)
-                    await self.archiveEvidence(recording, id: token, raw: raw, recognition: provider.recognitionDetails, failure: DictationFailure.noSpeech.message)
+                    let failure = DictationFailure.emptyTranscript(raw: raw)
+                    self.trace("recognition.cleanedEmpty")
+                    self.fail(failure)
+                    await self.archiveEvidence(recording, id: token, raw: raw, recognition: provider.recognitionDetails, failure: failure.message)
                     return
                 }
                 self.trace("cleanup.finished", ["characters": String(text.count), "vocabularyFixes": String(fixes + heard.fixes + provider.vocabularyFixes)])
@@ -680,7 +736,7 @@ final class AppModel {
         } completion: { [weak self] in
             guard let self else { return }
             installer.onProgress = nil
-            let boosterNote = model.engine == .parakeet && !self.phraseBoosterInstalled
+            let boosterNote = model.engine == .parakeet && model.id != "parakeet-unified" && !self.phraseBoosterInstalled
                 ? " The phrase booster didn’t download. Get it in Vocabulary." : ""
             if self.settings.selectedModelID == selection, !self.isBusy {
                 self.selectModel(model, prepared: installer)
@@ -706,6 +762,17 @@ final class AppModel {
             try await SpeakerDetection.install { fraction in Task { @MainActor in report(fraction * 0.9) } }
         } completion: { [weak self] in
             self?.statusMessage = "New meetings will tell the speakers on the call apart."
+        }
+    }
+
+    func installSpeakerCleanup() {
+        guard !isInstalling, !isBusy else { return }
+        install(id: Self.speakerCleanupID, name: "speaker cleanup") { report in
+            try await SpeakerAudioCleaner.install { fraction in Task { @MainActor in report(fraction) } }
+        } completion: { [weak self] in
+            self?.settings.reduceSpeakerAudio = true
+            self?.saveSettings()
+            self?.statusMessage = "Speaker cleanup is ready. macOS may ask to allow system audio recording."
         }
     }
 
@@ -753,6 +820,7 @@ final class AppModel {
     func selectModel(_ model: SpeechModel, prepared: (any SpeechProvider)? = nil) {
         guard !isBusy else { return }
         settings.selectedModelID = model.id
+        if model.id == "parakeet-unified" { settings.language = "en" }
         provider?.cancel()
         loading?.task.cancel()
         provider = prepared
@@ -846,6 +914,7 @@ final class AppModel {
         installedModelIDs = Set(models.filter { WhisperKitProvider.isInstalled($0) || ParakeetProvider.isInstalled($0) }.map(\.id))
         phraseBoosterInstalled = ParakeetProvider.isPhraseBoosterInstalled()
         speakerDetectionInstalled = SpeakerDetection.isInstalled()
+        speakerCleanupInstalled = SpeakerAudioCleaner.isInstalled()
         modelRevision += 1
     }
 

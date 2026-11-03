@@ -38,6 +38,8 @@ public struct SpeechModel: Identifiable, Hashable, Sendable {
     public static let catalog: [SpeechModel] = [
         .init(id: "apple", name: "Apple on-device", detail: "Uses an available macOS language pack. No cloud fallback.",
               sizeLabel: "System managed", engine: .apple, modelName: "apple"),
+        .init(id: "parakeet-unified", name: "Parakeet Unified", detail: "NVIDIA's English-only model for offline dictation, with punctuation and live previews.",
+              sizeLabel: "~615 MB", engine: .parakeet, modelName: "parakeet-unified-en-0.6b", languages: ["en"]),
         .init(id: "parakeet-ultra", name: "Parakeet Ultra", detail: "Parakeet TDT v3 further trained by Moondream for fewer mistakes, with punctuation, the same 25 European languages and the same speed.",
               sizeLabel: "~730 MB", engine: .parakeet, modelName: "parakeet-ultra", languages: parakeetV3Languages),
         .init(id: "parakeet-v3", name: "Parakeet TDT v3", detail: "NVIDIA's multilingual model for 25 European languages, with punctuation. Fast on the Neural Engine.",
@@ -98,6 +100,7 @@ public enum SpeechError: LocalizedError, Sendable {
     case emptyAudio
     case audioUnavailable
     case downloadFailed
+    case unsupportedLanguage(String)
 
     public var errorDescription: String? {
         switch self {
@@ -111,6 +114,7 @@ public enum SpeechError: LocalizedError, Sendable {
         case .emptyAudio: "The recording contains no audio."
         case .audioUnavailable: "Select an existing local audio file."
         case .downloadFailed: "Hugging Face didn’t send the model files. Check your internet connection and try again."
+        case .unsupportedLanguage(let language): "The selected model does not support \(language). Choose another spoken language or model."
         }
     }
 }

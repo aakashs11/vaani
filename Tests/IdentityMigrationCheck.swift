@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import VaaniCore
 
@@ -28,7 +29,9 @@ func check(_ condition: Bool) { precondition(condition) }
         let original = Transcript(text: "Synthetic example.", rawText: "synthetic example", duration: 1, modelName: "test", language: "en")
         state.history = [original]
         try LocalStore(directory: source).save(state)
-        try Data([1,2,3]).write(to: source.appendingPathComponent("cached-model.bin"))
+        var modelBytes = Data(repeating: 0x5A, count: 2 * 1_048_576 + 137)
+        modelBytes[modelBytes.count - 1] = 0xA5
+        try modelBytes.write(to: source.appendingPathComponent("cached-model.bin"))
         let audio = root.appendingPathComponent("source.wav")
         var wav = Data("RIFF".utf8)
         func number<T: FixedWidthInteger>(_ value: T) -> Data { withUnsafeBytes(of: value.littleEndian) { Data($0) } }
@@ -43,7 +46,10 @@ func check(_ condition: Bool) { precondition(condition) }
         try await evidenceStore.setReference(id: original.id, text: "Reviewed synthetic example", reviewed: true)
         check(try LegacyIdentityMigration.migrate(from: source, to: target))
         check(try LocalStore(directory: target).load() == state)
-        check(try Data(contentsOf: target.appendingPathComponent("cached-model.bin")) == Data([1,2,3]))
+        check(try Data(contentsOf: target.appendingPathComponent("cached-model.bin")) == modelBytes)
+        let receipt = try JSONSerialization.jsonObject(with: Data(contentsOf: target.appendingPathComponent(".vaani-migration.json"))) as! [String: Any]
+        let modelDigest = SHA256.hash(data: modelBytes).map { String(format: "%02x", $0) }.joined()
+        check((receipt["files"] as? [String: String])?["cached-model.bin"] == modelDigest)
         check(fm.fileExists(atPath: source.appendingPathComponent("workspace.json").path))
         let migratedEvidence = DictationEvidenceStore(directory: target.appendingPathComponent("DictationEvidence"))
         let saved = try await migratedEvidence.records()

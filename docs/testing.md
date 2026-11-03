@@ -4,9 +4,17 @@ Automated checks and physical Mac checks establish different things. A successfu
 
 ## Automated checks
 
+Run `make verify` before installing or releasing pipeline changes. It runs `make test` and then fresh local accuracy and latency evals from `local/evals.json`. Missing corpora, baselines, or installed models fail the gate. See [local benchmark setup](dictation-benchmark.md). `make run`, `make dev`, `make release`, and `make ship` use this gate.
+
 Run `make test` with a complete compatible Xcode toolchain. It runs Swift build/tests, transcript/meeting evaluator checks, release preflight checks, migration fixtures, saved-evidence/vocabulary checks, and capture checks. The package requires Swift 6.2+. Optional Apple Intelligence notes are disabled in the current build configuration.
 
+`make test` also tests the benchmark scorer and eval runner. CI runs these tooling checks without private audio or models. A CI pass is not a corpus accuracy or latency pass.
+
 The installed Command Line Tools do not discover Swift Testing automatically and omit its Foundation overlay module. `scripts/test-swift.sh` locates the bundled core Testing framework and disables automatic overlay imports on CLT. It runs the same tests. Full Xcode uses its normal configuration. CI is configured for the complete Xcode toolchain on the `macos-26` Apple Silicon runner.
+
+Canonical build/test/eval commands apply the pinned FluidAudio repetition fix.
+Before invoking Swift directly, run `bash scripts/prepare-dependencies.sh`.
+Dependency/source drift fails closed. See [patch maintenance](../patches/README.md).
 
 Focused checks against production code are available independently:
 

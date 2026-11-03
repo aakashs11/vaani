@@ -141,6 +141,16 @@ public enum TranscriptCleaner {
         var i = 0
         while i < tokens.count {
             guard let n = [3, 2, 1].first(where: { repeats(tokens, at: i, length: $0) }) else { i += 1; continue }
+            var end = i + 2 * n
+            while repeats(tokens, at: end - n, length: n) { end += n }
+            // A repeated utterance at a clause boundary may be deliberate. Only
+            // collapse a restart when more words continue the same clause.
+            guard end < tokens.count,
+                  !tokens[end - 1].trailing.contains(where: clauseBreaks.contains),
+                  !tokens[end - 1].trailing.contains(where: \.isNewline) else {
+                i = end
+                continue
+            }
             tokens[i + n - 1].trailing = tokens[i + 2 * n - 1].trailing
             tokens.removeSubrange(i + n..<i + 2 * n)
         }

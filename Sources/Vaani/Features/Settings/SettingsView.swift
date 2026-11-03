@@ -81,6 +81,28 @@ struct SettingsView: View {
                         .fixedSize()
                         .disabled(model.isBusy)
                     }
+                    if #available(macOS 14.2, *) {
+                        RowDivider()
+                        if model.speakerCleanupInstalled {
+                            SettingToggle("Reduce speaker audio",
+                                          caption: "Helps with music playing from this Mac without changing its volume. Uses temporary system audio recording, processed locally and deleted afterwards. Words appear after you finish speaking.",
+                                          isOn: setting(\.reduceSpeakerAudio))
+                                .disabled(model.isBusy)
+                        } else {
+                            SettingRow("Reduce speaker audio", caption: "Download 19 MB to help remove this Mac’s music from dictation. Runs locally and keeps playback going.") {
+                                if let installation = model.installation, installation.id == AppModel.speakerCleanupID,
+                                   installation.failure == nil {
+                                    Button("Cancel \(Int(installation.progress * 100))%") { model.cancelInstallation() }
+                                } else {
+                                    Button("Download") { model.installSpeakerCleanup() }
+                                        .disabled(model.isInstalling || model.isBusy)
+                                }
+                            }
+                        }
+                        if let issue = model.speakerCleanupIssue {
+                            Text(issue).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 SettingsSection("After you speak") {
@@ -167,7 +189,7 @@ struct SettingsView: View {
     }
 
     private var vocabularyCaption: String {
-        guard model.selectedModel.engine == .parakeet else {
+        guard model.selectedModel.engine == .parakeet, model.selectedModel.id != "parakeet-unified" else {
             return "Add the names and terms you say often so they’re written your way."
         }
         return model.phraseBoosterInstalled

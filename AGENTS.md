@@ -42,3 +42,16 @@ Run `swift build` and `swift test` for Swift changes. Run
 `./scripts/run.sh` launches the bundle. Follow `docs/testing.md` for permission,
 microphone, global shortcut, paste, cancellation and offline model checks.
 Distinguish automated checks from OS behavior that has not been exercised.
+
+For pipeline changes, run `make verify` before declaring the change verified,
+launching a candidate, installation, or release. It runs
+all suites registered in `local/evals.json` against fresh CLI output and gates
+accuracy plus p50/p95 latency. Missing local assets are failures, not skips.
+Keep baselines immutable and record their model, settings and hardware. Do not
+replace a baseline to hide a regression. CI tooling tests do not replace local
+corpus evaluation. See `docs/dictation-benchmark.md`.
+
+Canonical builds apply the reviewed FluidAudio compatibility patch via
+`scripts/prepare-dependencies.sh`. Run that script before direct `swift build`
+or `swift test`. The patch refuses dependency/source drift. Review it when
+changing the FluidAudio pin. See `patches/README.md`.

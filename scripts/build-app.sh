@@ -8,6 +8,7 @@ if [[ $# -gt 2 || ( "$configuration" != debug && "$configuration" != release ) |
     echo 'Usage: scripts/build-app.sh [debug|release] [arm64|x86_64]' >&2
     exit 2
 fi
+bash scripts/prepare-dependencies.sh
 swift build -c "$configuration" --arch "$architecture" --product Vaani -Xswiftc -DDISABLE_APPLE_INTELLIGENCE
 binary_dir="$(swift build -c "$configuration" --arch "$architecture" --show-bin-path)"
 destination="$binary_dir/Vaani.app"
