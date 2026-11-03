@@ -85,7 +85,13 @@ public enum LegacyIdentityMigration {
         let file = try FileHandle(forReadingFrom: url)
         defer { try? file.close() }
         var hash = SHA256()
-        while let data = try file.read(upToCount: 1_048_576), !data.isEmpty { hash.update(data: data) }
+        // FileHandle's bridged buffers otherwise remain autoreleased until the
+        // surrounding pool drains, retaining entire model files during startup.
+        while try autoreleasepool(invoking: {
+            guard let data = try file.read(upToCount: 1_048_576), !data.isEmpty else { return false }
+            hash.update(data: data)
+            return true
+        }) {}
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 

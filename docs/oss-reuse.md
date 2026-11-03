@@ -4,6 +4,20 @@ This file preserves BetterWispr's detailed reuse ledger as inherited at the base
 
 ---
 
+## Speaker cleanup, November 2026
+
+Vaani calls FluidAudio 0.17.5's `LocalVqeManager` with microphone audio and a
+timestamp-aligned playback reference. The recorder reuses the existing unmuted
+Core Audio process tap attributed below. The alignment, file ownership, settings,
+and fallback integration are Vaani code. No additional upstream source is vendored.
+
+The optional [LocalVQE v1.3 Core ML weights](https://huggingface.co/FluidInference/localvqe-coreml)
+are Apache-2.0 according to their model card, converted by FluidInference from
+[LocalVQE](https://github.com/localai-org/LocalVQE), a DeepVQE derivative.
+They are downloaded only through an explicit action and are not bundled in the app.
+Runtime loading uses the local-directory initializer, never the downloader.
+See [background-music validation](background-music.md) for measured limits.
+
 # Open-source provenance
 
 Reviewed 2026-10-08. BetterWispr's original code remains Apache-2.0. Third-party
@@ -26,8 +40,14 @@ files before model loading; it does not use that network fallback during dictati
 
 `Sources/BetterWisprCore/Speech/ParakeetProvider.swift` uses
 [FluidAudio](https://github.com/FluidInference/FluidAudio) 0.17.5 (Apache-2.0)
-as a SwiftPM dependency to run NVIDIA Parakeet TDT on the Neural Engine. No
-FluidAudio source is copied. Models load with `AsrModels.loadLocal`, which never
+as a SwiftPM dependency to run NVIDIA Parakeet TDT on the Neural Engine. Vaani
+keeps a small reviewed compatibility patch against revision
+`0b1f46289fe27d95b5e66ad8be46e64f5ee02ae7` in
+`patches/fluidaudio-0.17.5-unified-repetition.patch`. It skips seam-only duplicate
+removal when Unified decoded a single window. Multiple-window and TDT behavior
+is unchanged. The application script verifies the pin and original/patched
+source hashes, and refuses drift. Apache-2.0 applies to the adapted dependency
+code; its license is bundled. See `patches/README.md`. Models load with `AsrModels.loadLocal`, which never
 fetches missing files; downloads only run from an explicit model installation.
 
 `Sources/BetterWisprCore/Speech/SpeakerDetection.swift` uses FluidAudio's

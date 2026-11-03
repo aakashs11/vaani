@@ -8,6 +8,8 @@ public struct RecordedAudio: Sendable {
     public let url: URL
     public let duration: TimeInterval
     public let hasSpeech: Bool
+    public var captureStart: TimeInterval? = nil
+    public var speakerReference: SpeakerAudioReference? = nil
 }
 
 public enum AudioRecordingError: LocalizedError {
@@ -30,6 +32,9 @@ public final class AudioRecorder {
     public var onError: (@MainActor (any Error) -> Void)?
     /// RMS amplitude gate, not a semantic speech detector. Lower this for quiet microphones.
     public var silenceThreshold: Float = 0.002
+    public var reduceSpeakerAudio = false
+    public private(set) var speakerAudioIssue: String?
+    private let speakerRecorder = SpeakerReferenceRecorder()
     /// Nil uses Automatic.
     public var microphone: AudioInputDevice? {
         didSet {
@@ -56,6 +61,7 @@ public final class AudioRecorder {
     private var progress: AudioCaptureProgress?
     private var recordingURL: URL?
     private var starting = false
+    private var finishing = false
     private var recordingID: UUID?
     private var meter = VoiceLevelMeter()
 
@@ -102,7 +108,7 @@ public final class AudioRecorder {
 
     /// `onSamples` receives 16 kHz mono copies of each buffer on the capture worker; the recorded file is unchanged.
     public func start(onSamples: (@Sendable ([Float]) -> Void)? = nil, since requestedAt: TimeInterval = ProcessInfo.processInfo.systemUptime) async throws {
-        guard writer == nil, !starting, !changingInput else { throw AudioRecordingError.alreadyRecording }
+        guard writer == nil, !starting, !finishing, !changingInput else { throw AudioRecordingError.alreadyRecording }
         self.requestedAt = requestedAt
         starting = true
         defer { starting = false }
@@ -131,6 +137,17 @@ public final class AudioRecorder {
             Task { @MainActor [weak self] in await self?.followMicrophone(session: id) }
         }
         do {
+            speakerAudioIssue = nil
+            if reduceSpeakerAudio {
+                do { try await speakerRecorder.start() }
+                catch {
+                    try Task.checkCancellation()
+                    guard recordingID == id else { throw CancellationError() }
+                    speakerAudioIssue = error.localizedDescription
+                }
+            }
+            try Task.checkCancellation()
+            guard recordingID == id else { throw CancellationError() }
             try await runMicrophone(session: id)
             try await progress.wait()
             guard recordingID == id else { throw CancellationError() }
@@ -143,9 +160,18 @@ public final class AudioRecorder {
     /// Completes the in-flight audio buffer before finalizing a normal dictation.
     public func finish() async throws -> RecordedAudio {
         guard let id = recordingID, let progress, writer != nil else { throw AudioRecordingError.notRecording }
+        guard !finishing else { throw AudioRecordingError.notRecording }
+        finishing = true
         inputObserver?.cancel()
         do {
             try await progress.wait(through: ProcessInfo.processInfo.systemUptime)
+            guard recordingID == id else { throw CancellationError() }
+            // Freeze microphone length before waiting for the independently buffered output tap.
+            haltMicrophone()
+            if reduceSpeakerAudio, let end = writer?.captureEnd {
+                do { try await speakerRecorder.waitForCapture(through: end) }
+                catch { try Task.checkCancellation() } // Missing reference falls back to ordinary dictation.
+            }
             guard recordingID == id else { throw CancellationError() }
         } catch {
             if recordingID == id { cancel() }
@@ -159,6 +185,7 @@ public final class AudioRecorder {
         guard let writer, let url = recordingURL else { throw AudioRecordingError.notRecording }
         haltMicrophone()
         let result = writer.finish()
+        let reference = speakerRecorder.finish()
         let error = result.error ?? recoveryError
         reset()
         if let error {
@@ -170,10 +197,12 @@ public final class AudioRecorder {
             throw SpeechError.emptyAudio
         }
         prepareMicrophone()
-        return RecordedAudio(url: url, duration: result.duration, hasSpeech: result.hasSpeech)
+        return RecordedAudio(url: url, duration: result.duration, hasSpeech: result.hasSpeech,
+                             captureStart: result.captureStart, speakerReference: reference)
     }
 
     public func cancel() {
+        speakerRecorder.cancel()
         invalidateMicrophonePreparation()
         haltMicrophone()
         _ = writer?.finish()
@@ -186,9 +215,10 @@ public final class AudioRecorder {
         guard let url = recordingURL, let progress else { throw AudioRecordingError.notRecording }
         changingInput = true
         defer { changingInput = false }
-        if preparedInput?.isReusable == false { preparedInput = nil }
-        let wasPrepared = preparedInput != nil
-        let input = try preparedInput ?? MicrophoneInput(choice: microphone)
+        // Resolve again before consuming preparation: a device change may still be
+        // waiting in the idle observer's debounce. The registry reuses a valid queue.
+        let input = try MicrophoneInput(choice: microphone)
+        let wasPrepared = input.isPrepared
         preparedInput = nil
         Logger(subsystem: "io.github.aakashs11.vaani", category: "MicrophoneCapture").notice("Reusing stopped prepared input: \(wasPrepared)")
         let format = input.format
@@ -199,7 +229,7 @@ public final class AudioRecorder {
         inputObserver?.observeDevice(input.deviceID)
         try await input.start(since: requestedAt) { @Sendable [weak self] buffer, time in
             let end = AudioCaptureProgress.endTime(time, frames: buffer.frameLength, sampleRate: sampleRate)
-            let loudness = writer.write(buffer)
+            let loudness = writer.write(buffer, at: time)
             tap?.receive(buffer)
             let step = Double(buffer.frameLength) / sampleRate / Double(max(1, loudness.count))
             Task { @MainActor [weak self] in
@@ -223,7 +253,7 @@ public final class AudioRecorder {
 
     /// Audio Queue converts native rate changes itself; restart only for a new device or stopped queue.
     private func followMicrophone(session id: UUID) async {
-        guard recordingID == id, !changingInput else { return }
+        guard recordingID == id, !changingInput, !finishing else { return }
         guard input?.isRunning != true || AudioInputs.resolve(microphone)?.id != device?.id else { return }
         haltMicrophone()
         do {
@@ -260,6 +290,7 @@ public final class AudioRecorder {
         tap = nil
         recordingURL = nil
         recordingID = nil
+        finishing = false
         onLevel?(VoiceLevels())
     }
 }
@@ -354,6 +385,7 @@ final class RecordingWriter: @unchecked Sendable {
     private let formatter = FormatConverter()
     private let sampleRate: Double
     private let threshold: Float
+    private var timeline = AudioCaptureTimeline()
 
     init(url: URL, format: AVAudioFormat, threshold: Float) throws {
         file = try AVAudioFile(forWriting: url, settings: format.settings, commonFormat: format.commonFormat, interleaved: format.isInterleaved)
@@ -361,10 +393,26 @@ final class RecordingWriter: @unchecked Sendable {
         self.threshold = threshold.isFinite ? max(0, threshold) : 0.002
     }
 
-    func write(_ input: AVAudioPCMBuffer) -> [Float] {
+    var captureEnd: TimeInterval? {
+        lock.withLock { timeline.start.map { $0 + Double(frames) / sampleRate } }
+    }
+
+    func waitForCapture(through boundary: TimeInterval) async throws {
+        let deadline = ContinuousClock.now + .milliseconds(150)
+        while true {
+            try Task.checkCancellation()
+            if let end = captureEnd, end >= boundary - 0.000_001 { return }
+            guard ContinuousClock.now < deadline else { throw AudioRecordingError.inputStalled }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    func write(_ input: AVAudioPCMBuffer, at time: AVAudioTime? = nil) -> [Float] {
         lock.lock()
         defer { lock.unlock() }
         guard let file, error == nil, input.frameLength > 0 else { return [] }
+        timeline.append(start: time.flatMap { $0.isHostTimeValid ? AVAudioTime.seconds(forHostTime: $0.hostTime) : nil },
+                        frames: Int(input.frameLength), sampleRate: input.format.sampleRate)
         let buffer: AVAudioPCMBuffer
         do {
             buffer = try formatter.convert(input, to: file.processingFormat)
@@ -382,12 +430,12 @@ final class RecordingWriter: @unchecked Sendable {
         return slices.map(\.rms)
     }
 
-    func finish() -> (duration: TimeInterval, hasSpeech: Bool, error: (any Error)?) {
+    func finish() -> (duration: TimeInterval, hasSpeech: Bool, error: (any Error)?, captureStart: TimeInterval?) {
         lock.lock()
         defer { lock.unlock() }
         file = nil
         Logger(subsystem: "io.github.aakashs11.vaani", category: "MicrophoneCapture").notice("Finished input: duration=\(Double(self.frames) / self.sampleRate)s active=\(Double(self.activeFrames) / self.sampleRate)s maxRMS=\(self.maximumRMS) threshold=\(self.threshold)")
         // ponytail: an amplitude gate rejects silence; use a learned VAD if noise rejection is needed.
-        return (Double(frames) / sampleRate, Double(activeFrames) / sampleRate >= 0.12, error)
+        return (Double(frames) / sampleRate, Double(activeFrames) / sampleRate >= 0.12, error, timeline.start)
     }
 }

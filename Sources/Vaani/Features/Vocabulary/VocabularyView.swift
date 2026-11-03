@@ -27,7 +27,7 @@ struct VocabularyView: View {
             }
             .onSubmit { if canAdd { addEntry() } }
 
-            if model.selectedModel.engine == .parakeet {
+            if model.selectedModel.engine == .parakeet, model.selectedModel.id != "parakeet-unified" {
                 phraseBoosterSection
             }
 

@@ -48,10 +48,22 @@ public enum AudioInputs {
         var stream = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         guard AudioObjectGetPropertyData(id, &property, 0, nil, &size, &stream) == noErr,
-              stream.mSampleRate > 0, stream.mChannelsPerFrame > 0,
-              let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: stream.mSampleRate,
-                                         channels: stream.mChannelsPerFrame, interleaved: true) else { throw AudioRecordingError.unavailable }
+              let format = captureFormat(sampleRate: stream.mSampleRate,
+                                         channels: stream.mChannelsPerFrame) else { throw AudioRecordingError.unavailable }
         return (device, id, format)
+    }
+
+    static func captureFormat(sampleRate: Double, channels: AVAudioChannelCount) -> AVAudioFormat? {
+        guard sampleRate.isFinite, sampleRate > 0, channels > 0, channels <= 0xFFFF else { return nil }
+        if channels <= 2 {
+            return AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate,
+                                 channels: channels, interleaved: true)
+        }
+        // Microphone arrays have independent channels, not a surround-speaker layout.
+        // AVAudioFormat requires an explicit layout for more than two channels.
+        guard let layout = AVAudioChannelLayout(layoutTag: kAudioChannelLayoutTag_DiscreteInOrder | channels) else { return nil }
+        return AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate,
+                             interleaved: true, channelLayout: layout)
     }
 
     private static let system = AudioObjectID(kAudioObjectSystemObject)

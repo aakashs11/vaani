@@ -18,8 +18,14 @@ Requires a compatible macOS development toolchain with Swift 6.2 or later. The p
 git clone https://github.com/aakashs11/vaani.git
 cd vaani
 make build
-make run
+make test
 ```
+
+`make run` requires a configured local accuracy/latency corpus and its installed
+models. Set up [the local evaluation registry](docs/dictation-benchmark.md), then
+run `make verify` and `make run`. Private recordings and model weights are not
+distributed with this repository. A missing registry fails verification rather
+than silently skipping accuracy checks.
 
 `bash scripts/build-app.sh release arm64` creates a development bundle and prints its path. Build products live under `.build`. Development bundles use ad-hoc signing unless `CODESIGN_IDENTITY` is explicitly supplied, so macOS may require renewed permissions after a rebuild. Do not disable Gatekeeper. A public notarized download is a separate release milestone and is not implied by a successful source build.
 
@@ -33,6 +39,20 @@ The current build disables optional Apple Intelligence meeting notes at compile 
 4. Hold the shortcut and wait for the recording bars before speaking. Release to finish. A quick tap can start hands-free recording and another tap finishes it. Escape cancels.
 
 Recognition can mishear words, names, numbers, and the opening of speech. Review consequential text before using it. With the microphone off between dictations, audio spoken before hardware activation cannot be recovered.
+
+## Speaker playback and accuracy work
+
+For music or other audio playing through this Mac's speakers, optionally install
+the 19 MB speaker-cleanup model and enable **Reduce speaker audio** in Settings.
+It requires macOS 14.2+ and System Audio Recording permission. Playback keeps
+playing. The temporary playback reference stays local and is deleted after
+dictation. See [setup and limitations](docs/background-music.md).
+
+The [November 4 development checkpoint](docs/dictation-update-20261104.md)
+consolidates the repetition fix, startup memory reduction, evaluation tooling,
+and model comparisons. Football commentary can still cause recognition errors,
+and a slow first-use cleanup remains under investigation. Measured improvements
+do not establish performance on an M1 Air with 8 GB RAM.
 
 ## Existing BetterWispr installations
 

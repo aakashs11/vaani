@@ -25,7 +25,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSAudioCaptureUsageDescription</key>
-	<string>Vaani records the other side of a meeting when you start meeting notes. Audio is processed on this Mac or sent to the API connection you select. Temporary recordings are deleted afterwards.</string>
+	<string>Vaani records system audio for meeting notes and, when you enable Reduce speaker audio, to remove speaker playback from dictation. The dictation playback reference is processed only on this Mac and deleted afterwards. Meeting audio is processed on this Mac or sent to the API connection you select.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Vaani records your microphone only when you start dictation. Local models process speech on this Mac. A selected API connection sends audio to that provider. If you enable saved recordings, audio is kept locally until retention or deletion removes it.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

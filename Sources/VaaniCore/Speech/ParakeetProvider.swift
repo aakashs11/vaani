@@ -11,6 +11,7 @@ public final class ParakeetProvider: SpeechProvider {
     public private(set) var recognitionDetails: RecognitionDetails?
     private let modelsDirectory: URL
     private var manager: AsrManager?
+    private var unifiedManager: UnifiedAsrManager?
     private var loadedModelID: String?
     private var preparing = false
     private var transcriptionTask: Task<String, any Error>?
@@ -29,9 +30,10 @@ public final class ParakeetProvider: SpeechProvider {
 
     nonisolated static let phraseBoosterMegabytes = 100.0
 
-    nonisolated static func source(for model: SpeechModel) -> (version: AsrModelVersion, repo: Repo, megabytes: Double)? {
+    nonisolated static func source(for model: SpeechModel) -> (version: AsrModelVersion?, repo: Repo, megabytes: Double)? {
         guard model.engine == .parakeet else { return nil }
         return switch model.modelName {
+        case "parakeet-unified-en-0.6b": (nil, .parakeetUnified, 615)
         case "parakeet-tdt-0.6b-v3": (.v3, .parakeetV3, 471)
         case "parakeet-tdt-0.6b-v2": (.v2, .parakeetV2, 460)
         case "parakeet-ultra": (.ultra, .parakeetUltra, 630)
@@ -48,8 +50,12 @@ public final class ParakeetProvider: SpeechProvider {
     public static func isInstalled(_ model: SpeechModel, modelsDirectory: URL = WhisperKitProvider.defaultModelsDirectory) -> Bool {
         guard let source = source(for: model) else { return false }
         let folder = folder(for: model, modelsDirectory: modelsDirectory)
-        return FileManager.default.fileExists(atPath: folder.appending(path: ".betterwispr-installed").path)
-            && AsrModels.modelsExist(at: folder, version: source.version)
+        guard FileManager.default.fileExists(atPath: folder.appending(path: ".betterwispr-installed").path) else { return false }
+        if let version = source.version { return AsrModels.modelsExist(at: folder, version: version) }
+        return ModelNames.ParakeetUnified.requiredModels(variant: "offline").allSatisfy { name in
+            let path = name.hasSuffix(".mlmodelc") ? "\(name)/coremldata.bin" : name
+            return FileManager.default.fileExists(atPath: folder.appending(path: path).path)
+        }
     }
 
     public nonisolated static var phraseBoosterDirectory: URL { CtcModels.defaultCacheDirectory(for: .ctc110m) }
@@ -135,7 +141,7 @@ public final class ParakeetProvider: SpeechProvider {
     public func prepare(model: SpeechModel, download: Bool) async throws {
         guard let source = Self.source(for: model) else { throw SpeechError.invalidModel }
         guard !preparing, transcriptionTask == nil, livePass == nil else { throw SpeechError.busy }
-        if loadedModelID == model.id, manager != nil { onProgress?(1); return }
+        if loadedModelID == model.id, manager != nil || unifiedManager != nil { onProgress?(1); return }
         preparing = true
         defer { preparing = false }
         try Task.checkCancellation()
@@ -143,22 +149,30 @@ public final class ParakeetProvider: SpeechProvider {
         if download && !Self.isInstalled(model, modelsDirectory: modelsDirectory) {
             try FileManager.default.createDirectory(at: folder.deletingLastPathComponent(), withIntermediateDirectories: true)
             onProgress?(0)
-            try await Self.download(source, to: folder, withBooster: !Self.isPhraseBoosterInstalled(), progress: onProgress)
+            try await Self.download(source, to: folder, withBooster: source.version != nil && !Self.isPhraseBoosterInstalled(), progress: onProgress)
             try Task.checkCancellation()
         }
         guard download || Self.isInstalled(model, modelsDirectory: modelsDirectory) else { throw SpeechError.modelNotInstalled(model.name) }
         onProgress?(0.95)
         manager = nil
+        unifiedManager = nil
+        boostingSession = nil
+        phraseBooster = nil
         loadedModelID = nil
-        let models = try await Task.detached { try AsrModels.loadLocal(from: folder, version: source.version) }.value
-        let asr = AsrManager()
-        try await asr.loadModels(models)
+        if let version = source.version {
+            let models = try await Task.detached { try AsrModels.loadLocal(from: folder, version: version) }.value
+            let asr = AsrManager()
+            try await asr.loadModels(models)
+            manager = asr
+        } else {
+            let unified = UnifiedAsrManager(encoderPrecision: .int8)
+            try await unified.loadModels(from: folder)
+            unifiedManager = unified
+        }
         try Task.checkCancellation()
         if download {
             try Data(model.modelName.utf8).write(to: folder.appending(path: ".betterwispr-installed"), options: .atomic)
         }
-        await loadPhraseBoosterIfInstalled()
-        manager = asr
         loadedModelID = model.id
         loadedVersion = source.version
         onProgress?(1)
@@ -166,11 +180,11 @@ public final class ParakeetProvider: SpeechProvider {
 
     /// Fetches the model in one pass while the phrase booster downloads beside it; a booster failure leaves the model usable.
     private static func download(
-        _ source: (version: AsrModelVersion, repo: Repo, megabytes: Double), to folder: URL, withBooster: Bool,
+        _ source: (version: AsrModelVersion?, repo: Repo, megabytes: Double), to folder: URL, withBooster: Bool,
         progress: (@MainActor @Sendable (Double) -> Void)?
     ) async throws {
         let shares = DownloadShares(megabytes: [source.megabytes, withBooster ? phraseBoosterMegabytes : 0]) { progress?($0 * 0.9) }
-        let variant = source.version == .v3 ? ParakeetEncoderPrecision.int8.rawValue : nil
+        let variant = source.version == nil ? "offline" : (source.version == .v3 ? ParakeetEncoderPrecision.int8.rawValue : nil)
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
                 try await ModelHub.download(source.repo, to: folder.deletingLastPathComponent(), variant: variant) { value in
@@ -218,7 +232,9 @@ public final class ParakeetProvider: SpeechProvider {
     }
 
     public func transcribe(audioURL: URL, language: String?, vocabulary: [String]) async throws -> String {
-        guard let manager, !preparing else { throw SpeechError.notPrepared }
+        guard !preparing, manager != nil || unifiedManager != nil else { throw SpeechError.notPrepared }
+        let manager = manager, unified = unifiedManager
+        try validateUnifiedLanguage(language)
         if let livePass { _ = try? await livePass.value }
         guard transcriptionTask == nil else { throw SpeechError.busy }
         guard audioURL.isFileURL, FileManager.default.fileExists(atPath: audioURL.path) else { throw SpeechError.audioUnavailable }
@@ -229,15 +245,22 @@ public final class ParakeetProvider: SpeechProvider {
         recognitionDetails = nil
         let task = Task {
             let text: String
-            if let session = await self.boostingSession(for: terms) {
+            if let unified {
+                let samples = try AudioConverter().resampleAudioFile(audioURL)
+                try Task.checkCancellation()
+                text = try await unified.transcribe(samples)
+                self.recognitionDetails = RecognitionDetails(originalText: text)
+            } else if let manager, let session = await self.boostingSession(for: terms) {
                 let boosted = try await Self.boostedTranscript(of: audioURL, language: hint, manager: manager, session: session)
                 text = boosted.text
                 self.vocabularyFixes = boosted.fixes
                 self.recognitionDetails = boosted.details
-            } else {
+            } else if let manager {
                 var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
                 text = try await manager.transcribe(audioURL, decoderState: &state, language: hint).text
                 self.recognitionDetails = RecognitionDetails(originalText: text)
+            } else {
+                throw SpeechError.notPrepared
             }
             try Task.checkCancellation()
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -249,10 +272,19 @@ public final class ParakeetProvider: SpeechProvider {
 
     /// One recognizer pass for the live preview; word timings are relative to `samples`.
     public func liveTranscribe(_ samples: [Float], language: String?) async throws -> LivePass {
-        guard let manager, !preparing else { throw SpeechError.notPrepared }
+        guard !preparing, manager != nil || unifiedManager != nil else { throw SpeechError.notPrepared }
+        let manager = manager, unified = unifiedManager
+        try validateUnifiedLanguage(language)
         guard transcriptionTask == nil, livePass == nil else { throw SpeechError.busy }
         let hint = Self.hint(for: language)
         let task = Task {
+            if let unified {
+                let result = try await unified.transcribeWithTimings(samples)
+                try Task.checkCancellation()
+                let words = TimedWord.words(from: result.tokenTimings)
+                return LivePass(words: words, confidence: words.map(\.confidence).min() ?? 0)
+            }
+            guard let manager else { throw SpeechError.notPrepared }
             var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
             let result = try await manager.transcribe(samples, decoderState: &state, language: hint)
             try Task.checkCancellation()
@@ -271,6 +303,13 @@ public final class ParakeetProvider: SpeechProvider {
     public func cancel() {
         transcriptionTask?.cancel()
         livePass?.cancel()
+    }
+
+    private func validateUnifiedLanguage(_ language: String?) throws {
+        if unifiedManager != nil, let language,
+           Locale(identifier: language).language.languageCode?.identifier != "en" {
+            throw SpeechError.unsupportedLanguage(language)
+        }
     }
 
     private func boostingSession(for terms: [String]) async -> VocabularyBoostingSession? {

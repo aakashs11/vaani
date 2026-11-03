@@ -8,6 +8,15 @@ The microphone remains off between dictations. Capture begins when you start a r
 
 Meeting notes can capture microphone and system audio after explicit start. Selected providers determine whether meeting audio/text is processed locally or remotely. Context features are separately controlled. Secure-input and clipboard safeguards remain in place.
 
+When **Reduce speaker audio** is enabled, dictation also captures a temporary
+reference of other applications' playback, with System Audio Recording
+permission. The installed cleanup model processes it locally. The reference and
+enhanced temporary file are deleted after dictation and are not added to saved
+evidence. The separate playback reference is never sent to a recognition API.
+The original microphone recording, which can include background playback, follows
+the saved-recording preference. If a remote speech provider is explicitly
+selected, it receives the microphone audio after any available cleanup.
+
 Diagnostic events are stored in `~/Library/Logs/io.github.aakashs11.vaani`, with bounded rotation. They contain session/configuration/timing metadata, not audio or transcript text. Diagnostic export is a user action and produces local files. Review and redact them before sharing.
 
 API keys remain in Keychain. Legacy credentials are copied through Keychain APIs on first use, never through plaintext exports. Migration leaves the legacy data copy intact for recovery. To erase all retained information, remove both the current and legacy/recovery copies only after confirming you no longer need them, and remove unwanted Keychain credentials through the system interface.
